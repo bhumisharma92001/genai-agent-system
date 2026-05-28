@@ -6,6 +6,7 @@ __pycache__/
 
 .env
 memory/*.db
+vector_store/
 .idea/
 
 .vscode/
