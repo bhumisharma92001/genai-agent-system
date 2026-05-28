@@ -1,14 +1,31 @@
 import uuid
 
+from langchain_text_splitters import (
+    RecursiveCharacterTextSplitter
+)
+
+
 class Chunker:
 
     def __init__(
         self,
-        chunk_size: int = 400,
-        overlap: int = 50
+        chunk_size: int = 700,
+        overlap: int = 150
     ):
-        self.chunk_size = chunk_size
-        self.overlap = overlap
+
+        self.text_splitter = (
+            RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size,
+                chunk_overlap=overlap,
+                separators=[
+                    "\n\n",
+                    "\n",
+                    ". ",
+                    " ",
+                    ""
+                ]
+            )
+        )
 
     def chunk_text(
         self,
@@ -16,36 +33,24 @@ class Chunker:
         metadata: dict
     ) -> list[dict]:
 
-        words = text.split()
+        chunks = (
+            self.text_splitter.split_text(text)
+        )
 
-        if not words:
-            return []
+        formatted_chunks = []
 
-        chunks = []
+        for chunk in chunks:
 
-        start = 0
-
-        while start < len(words):
-
-            end = start + self.chunk_size
-
-            chunk_words = words[start:end]
-
-            chunks.append(
+            formatted_chunks.append(
                 {
                     "chunk_id": str(uuid.uuid4()),
                     "chunk_type": "text",
-                    "text": " ".join(chunk_words),
+                    "text": chunk,
                     "metadata": metadata
                 }
             )
 
-            if end >= len(words):
-                break
-
-            start = end - self.overlap
-
-        return chunks
+        return formatted_chunks
 
     @staticmethod
     def chunk_table_summary(

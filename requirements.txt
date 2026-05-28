@@ -6,3 +6,4 @@ openpyxl
 sentence-transformers
 chromadb
 transformers
+langchain-text-splitters

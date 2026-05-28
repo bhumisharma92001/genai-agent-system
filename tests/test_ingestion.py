@@ -4,7 +4,7 @@ from ingestion.document_loader import DocumentLoader
 loader = DocumentLoader()
 
 chunks = loader.load(
-    r"C:\Users\bhoomi.sharma\Downloads\sales_report_30_records.xlsx"
+    r"C:\Users\bhoomi.sharma\Downloads\sample.pdf"
 )
 
 print("\nTOTAL CHUNKS:\n")

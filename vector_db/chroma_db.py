@@ -45,5 +45,10 @@ class ChromaDB(BaseVectorDB):
 
         return self.collection.query(
             query_embeddings=[embedding],
-            n_results=k
+            n_results=k,
+            include=[
+                "documents",
+                "metadatas",
+                "distances"
+            ]
         )
