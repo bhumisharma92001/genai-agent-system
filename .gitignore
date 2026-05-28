@@ -5,7 +5,7 @@ __pycache__/
 *.pyc
 
 .env
-
+memory/*.db
 .idea/
 
 .vscode/
