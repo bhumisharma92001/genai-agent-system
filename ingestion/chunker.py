@@ -1,17 +1,34 @@
-import uuid
-
 from langchain_text_splitters import (
     RecursiveCharacterTextSplitter
 )
 
 
-class Chunker:
+class TextChunker:
 
     def __init__(
         self,
-        chunk_size: int = 700,
-        overlap: int = 150
+        chunk_size: int,
+        overlap: int
     ):
+ 
+        if chunk_size <= 0:
+
+            raise ValueError(
+                "chunk_size must be positive"
+            )
+
+        if overlap < 0:
+
+            raise ValueError(
+                "overlap cannot be negative"
+            )
+
+        if overlap >= chunk_size:
+
+            raise ValueError(
+                "overlap must be smaller "
+                "than chunk_size"
+            )
 
         self.text_splitter = (
             RecursiveCharacterTextSplitter(
@@ -27,40 +44,25 @@ class Chunker:
             )
         )
 
-    def chunk_text(
+    def split_text(
         self,
-        text: str,
-        metadata: dict
-    ) -> list[dict]:
+        text: str
+    ) -> list[str]:
 
-        chunks = (
-            self.text_splitter.split_text(text)
-        )
+        if not text or not text.strip():
 
-        formatted_chunks = []
-
-        for chunk in chunks:
-
-            formatted_chunks.append(
-                {
-                    "chunk_id": str(uuid.uuid4()),
-                    "chunk_type": "text",
-                    "text": chunk,
-                    "metadata": metadata
-                }
+            raise ValueError(
+                "Input text cannot be empty"
             )
 
-        return formatted_chunks
+        try:
 
-    @staticmethod
-    def chunk_table_summary(
-        summary: str,
-        metadata: dict
-    ) -> dict:
+            return self.text_splitter.split_text(
+                text
+            )
 
-        return {
-            "chunk_id": str(uuid.uuid4()),
-            "chunk_type": "table_summary",
-            "text": summary,
-            "metadata": metadata
-        }
+        except Exception as e:
+
+            raise RuntimeError(
+                "Failed to split text"
+            ) from e

@@ -1,6 +1,4 @@
-from sentence_transformers import (
-    CrossEncoder
-)
+from sentence_transformers import CrossEncoder
 
 
 class Reranker:
@@ -11,10 +9,17 @@ class Reranker:
             "cross-encoder/ms-marco-MiniLM-L-6-v2"
         )
     ):
+        try:
+            self.model = CrossEncoder(
+                model_name
+            )
 
-        self.model = CrossEncoder(
-            model_name
-        )
+        except Exception as e:
+
+            raise RuntimeError(
+                "Failed to load reranker model"
+            ) from e
+
 
     def rerank(
         self,
@@ -23,27 +28,52 @@ class Reranker:
         top_k: int = 3
     ) -> list[dict]:
 
-        pairs = [
-            [query, chunk["text"]]
-            for chunk in chunks
-        ]
+        if not query.strip():
 
-        scores = self.model.predict(
-            pairs
-        )
+            raise ValueError(
+                "query cannot be empty"
+            )
 
-        scored_chunks = list(
-            zip(chunks, scores)
-        )
+        if not chunks:
 
-        scored_chunks.sort(
-            key=lambda x: x[1],
-            reverse=True
-        )
+            raise ValueError(
+                "chunks cannot be empty"
+            )
 
-        reranked_chunks = [
-            chunk
-            for chunk, score in scored_chunks[:top_k]
-        ]
+        if top_k <= 0:
 
-        return reranked_chunks
+            raise ValueError(
+                "top_k must be positive"
+            )
+
+        try:
+            pairs = [
+                [query, chunk["text"]]
+                for chunk in chunks
+            ]
+
+            scores = self.model.predict(
+                pairs
+            )
+
+            scored_chunks = list(
+                zip(chunks, scores)
+            )
+
+            scored_chunks.sort(
+                key=lambda x: x[1],
+                reverse=True
+            )
+
+            reranked_chunks = [
+                chunk
+                for chunk, score in scored_chunks[:top_k]
+            ]
+
+            return reranked_chunks
+
+        except Exception as e:
+
+            raise RuntimeError(
+                "Failed to rerank chunks"
+            ) from e

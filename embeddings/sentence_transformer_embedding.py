@@ -12,18 +12,38 @@ class SentenceTransformerEmbedding(BaseEmbedding):
 
         self.model_name = model_name
 
-        self.model = SentenceTransformer(
-            model_name
-        )
+        try:
+
+            self.model = SentenceTransformer(
+                model_name
+            )
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load model: "
+                f"{model_name}"
+            ) from e
 
     def embed(
         self,
         text: str
     ) -> list[float]:
+        if not text or not text.strip():
 
-        embedding = self.model.encode(
-            text,
-            normalize_embeddings=True
-        )
+            raise ValueError(
+                "Input text cannot be empty"
+            )
 
-        return embedding.tolist()
+        try:
+
+            embedding = self.model.encode(
+                text
+            )
+
+            return embedding.tolist()
+
+        except Exception as e:
+
+            raise RuntimeError(
+                "Failed to generate embedding"
+            ) from e

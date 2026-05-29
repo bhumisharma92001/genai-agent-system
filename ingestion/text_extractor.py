@@ -1,9 +1,6 @@
-# ingestion/text_extractor.py
-
 import pdfplumber
 from docx import Document
-import pandas as pd
-
+from pathlib import Path
 
 class TextExtractor:
 
@@ -12,100 +9,85 @@ class TextExtractor:
         file_path: str
     ) -> str:
 
-        if file_path.endswith(".pdf"):
-            return self._extract_pdf_text(file_path)
+        if not file_path:
 
-        if file_path.endswith(".docx"):
-            return self._extract_docx_text(file_path)
+            raise ValueError(
+                "file_path cannot be empty"
+            )
 
-        if (
-            file_path.endswith(".csv")
-            or file_path.endswith(".xlsx")
-            or file_path.endswith(".xls")
-        ):
-            return self._extract_tabular_text(file_path)
+        path = Path(file_path)
 
-        raise ValueError("Unsupported file type")
+        if not path.exists():
 
-    @staticmethod
+            raise FileNotFoundError(
+                f"File not found: {file_path}"
+            )
+
+        try:
+            if file_path.endswith(".pdf"):
+                return self._extract_pdf_text(file_path)
+
+            if file_path.endswith(".docx"):
+                return self._extract_docx_text(file_path)
+
+            raise ValueError(
+                "Unsupported text document type"
+            )
+
+        except Exception as e:
+
+            raise RuntimeError(
+                "Failed to extract text"
+            ) from e
+
+
     def _extract_pdf_text(
+        self,
         file_path: str
-    ) -> str:
+        ) -> str:
 
-        texts = []
+        extracted_texts = []
 
-        with pdfplumber.open(file_path) as pdf:
+        try:
 
-            for page in pdf.pages:
+            with pdfplumber.open(file_path) as pdf:
 
-                page_text = page.extract_text()
+                for page in pdf.pages:
 
-                if not page_text:
-                    continue
+                    page_text = page.extract_text()
 
-                lines = page_text.split("\n")
+                    if page_text:
+                        extracted_texts.append(page_text)
 
-                cleaned_lines = []
+            return "\n".join(extracted_texts)
 
-                skip_table = False
+        except Exception as e:
 
-                for line in lines:
+            raise RuntimeError(
+                "Failed to extract PDF text"
+            ) from e
 
-                    normalized = " ".join(
-                        line.split()
-                    )
 
-                    # detect table start
-                    if (
-                        "Quarter Revenue Growth %" in normalized
-                    ):
-                        skip_table = True
-                        continue
-
-                    # stop skipping when next section starts
-                    if (
-                        skip_table
-                        and normalized.startswith("3.")
-                    ):
-                        skip_table = False
-
-                    if not skip_table:
-                        cleaned_lines.append(line)
-
-                cleaned_text = "\n".join(
-                    cleaned_lines
-                )
-
-                texts.append(cleaned_text)
-
-        return "\n".join(texts)
-
-    @staticmethod
     def _extract_docx_text(
+        self,
         file_path: str
     ) -> str:
+        extracted_paragraphs = []
+        try:
+            document = Document(file_path)
 
-        document = Document(file_path)
+            for para in document.paragraphs:
 
-        paragraphs = []
+                text = para.text.strip()
 
-        for para in document.paragraphs:
+                if text:
 
-            text = para.text.strip()
+                    extracted_paragraphs.append(text)
 
-            if text:
-                paragraphs.append(text)
+            return "\n".join(extracted_paragraphs)
 
-        return "\n".join(paragraphs)
+        except Exception as e:
+            raise RuntimeError(
+                "Failed to extract DOCX text"
+            ) from e
 
-    @staticmethod
-    def _extract_tabular_text(
-        file_path: str
-    ) -> str:
-
-        if file_path.endswith(".csv"):
-            df = pd.read_csv(file_path)
-        else:
-            df = pd.read_excel(file_path)
-
-        return df.to_string(index=False)

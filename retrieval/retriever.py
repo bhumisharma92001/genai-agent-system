@@ -1,26 +1,23 @@
-from embeddings.sentence_transformer_embedding import (
-    SentenceTransformerEmbedding
-)
-
-from vector_db.chroma_db import ChromaDB
-
 from retrieval.reranker import Reranker
 
 
 class Retriever:
 
-    def __init__(self):
-
+    def __init__( self, embedding_model, vector_db, reranker: Reranker ):
+        
         self.embedding_model = (
-            SentenceTransformerEmbedding()
+            embedding_model
         )
 
-        self.vector_db = ChromaDB()
+        self.vector_db = (
+            vector_db
+        )
 
-        self.reranker = Reranker()
-
+        self.reranker = (
+            reranker
+        )
+    @staticmethod
     def keyword_score(
-        self,
         query: str,
         text: str
     ) -> int:
@@ -45,63 +42,79 @@ class Retriever:
         k: int = 10
     ) -> list[dict]:
 
-        query_embedding = (
-            self.embedding_model.embed(query)
-        )
+        if not query.strip():
 
-        results = self.vector_db.query(
-            embedding=query_embedding,
-            k=k
-        )
+            raise ValueError(
+                "query cannot be empty"
+            )
 
-        chunks = []
+        if k <= 0:
 
-        documents = results["documents"][0]
+            raise ValueError(
+                "k must be positive"
+            )
 
-        metadatas = results["metadatas"][0]
+        try:
 
-        distances = results["distances"][0]
+            query_embedding = (
+                self.embedding_model.embed(query)
+            )
 
-        for document, metadata, distance in zip(
-            documents,
-            metadatas,
-            distances
-        ):
+            results = self.vector_db.query(
+                embedding=query_embedding,
+                k=k
+            )
 
-            semantic_score = 1 - distance
+            chunks = []
 
-            keyword_boost = (
-                self.keyword_score(
-                    query=query,
-                    text=document
+            documents = results["documents"][0]
+
+            metadatas = results["metadatas"][0]
+
+            distances = results["distances"][0]
+
+            for document, metadata, distance in zip(
+                documents,
+                metadatas,
+                distances
+            ):
+
+                semantic_score = 1 - distance
+
+                keyword_boost = (
+                    self.keyword_score(
+                        query=query,
+                        text=document
+                    )
                 )
+
+                final_score = (
+                    semantic_score
+                    +
+                    (0.1 * keyword_boost)
+                )
+
+                chunks.append(
+                    {
+                        "text": document,
+                        "metadata": metadata,
+                        "score": final_score
+                    }
+                )
+
+            chunks.sort(
+                key=lambda x: x["score"],
+                reverse=True
             )
 
-            final_score = (
-                semantic_score
-                +
-                (0.1 * keyword_boost)
-            )
-
-            chunks.append(
-                {
-                    "text": document,
-                    "metadata": metadata,
-                    "score": final_score
-                }
-            )
-
-        chunks.sort(
-            key=lambda x: x["score"],
-            reverse=True
-        )
-
-        reranked_chunks = (
-            self.reranker.rerank(
+            return self.reranker.rerank(
                 query=query,
                 chunks=chunks,
                 top_k=3
             )
-        )
 
-        return reranked_chunks
+        except Exception as e:
+
+            raise RuntimeError(
+                "Failed to retrieve chunks"
+            ) from e
