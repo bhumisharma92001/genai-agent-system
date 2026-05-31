@@ -7,8 +7,8 @@ class TextChunker:
 
     def __init__(
         self,
-        chunk_size: int,
-        overlap: int
+        chunk_size: int=700,
+        overlap: int=100
     ):
  
         if chunk_size <= 0:
