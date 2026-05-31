@@ -8,4 +8,4 @@ chromadb
 transformers
 langchain-text-splitters
 python-dotenv
-google-generativeai
+openai
