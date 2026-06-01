@@ -1,6 +1,5 @@
 from retrieval.reranker import Reranker
 
-
 class Retriever:
 
     def __init__( self, embedding_model, vector_db, reranker: Reranker ):
@@ -16,8 +15,8 @@ class Retriever:
         self.reranker = (
             reranker
         )
-    @staticmethod
     def keyword_score(
+        self,
         query: str,
         text: str
     ) -> int:
@@ -102,16 +101,13 @@ class Retriever:
                     }
                 )
 
-            chunks.sort(
-                key=lambda x: x["score"],
-                reverse=True
-            )
-
-            return self.reranker.rerank(
+            reranked_chunks = self.reranker.rerank(
                 query=query,
                 chunks=chunks,
-                top_k=3
+                top_k=10
             )
+
+            return reranked_chunks
 
         except Exception as e:
 

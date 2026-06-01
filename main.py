@@ -132,21 +132,20 @@ while True:
         context = (
             memory_manager.build_context(
                 limit=100
-                )
             )
-        
+        )
 
         summary = (
             summarization_agent.summarize(
                 context
-                )
             )
+        )
 
         facts = (
             summarization_agent.extract_facts(
                 context
-                )
             )
+        )
 
         memory_manager.save_summary(
             summary=summary,

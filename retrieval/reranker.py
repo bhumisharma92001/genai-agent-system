@@ -1,6 +1,5 @@
 from sentence_transformers import CrossEncoder
 
-
 class Reranker:
 
     def __init__(
@@ -50,7 +49,7 @@ class Reranker:
             pairs = [
                 [query, chunk["text"]]
                 for chunk in chunks
-            ]
+            ]#cross encoder needs pair of query and text for input
 
             scores = self.model.predict(
                 pairs
@@ -58,18 +57,23 @@ class Reranker:
 
             scored_chunks = list(
                 zip(chunks, scores)
-            )
+            )#same index is combined
 
             scored_chunks.sort(
-                key=lambda x: x[1],
+                key=lambda x: x[1],#x is chunk and x[1]is score
                 reverse=True
             )
 
-            reranked_chunks = [
-                chunk
-                for chunk, score in scored_chunks[:top_k]
-            ]
+            reranked_chunks = []
 
+            for chunk, score in scored_chunks[:top_k]:
+                print("RAW SCORE:", score)
+
+                chunk["rerank_score"] = float(score)
+
+                reranked_chunks.append(
+                chunk
+            )
             return reranked_chunks
 
         except Exception as e:

@@ -39,17 +39,24 @@ class ReasoningAgent:
             prompt = (
                 "You are a document question-answering assistant.\n\n"
 
-                "Answer the question using only the information "
-                "provided in the context.\n\n"
+                "Use only the information present in the provided context.\n\n"
+
+                "The context may contain plain text, tables, spreadsheets, "
+                "CSV records, Excel rows, or other structured data.\n\n"
+
+                "Answer using the exact information found in the context.\n"
+
+                "Return values directly when they are present in the context.\n"
+
+                "If multiple records satisfy the question, return all relevant values.\n"
 
                 "Do not use external knowledge.\n"
 
-                "Do not make assumptions.\n"
+                "Do not make assumptions.\n\n"
 
-                "If the answer is not present in the context, "
-                "respond exactly:\n"
+                "If the answer is not present in the context, respond exactly:\n"
 
-                "'I could not find the answer in the provided documents.'\n\n"
+                "I could not find the answer in the provided documents.\n\n"
 
                 f"Context:\n{context}\n\n"
 
