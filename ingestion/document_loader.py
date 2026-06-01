@@ -4,6 +4,7 @@ from ingestion.table_extractor import TableExtractor
 from ingestion.chunker import TextChunker
 from ingestion.chunk_factory import ChunkFactory
 from ingestion.table_summarizer import TableSummarizer
+from ingestion.table_storage import TableStorage
 
 
 class DocumentLoader:
@@ -29,6 +30,10 @@ class DocumentLoader:
 
         self.table_summarizer = (
             TableSummarizer()
+        )
+
+        self.table_storage = (
+            TableStorage()
         )
 
     def load(
@@ -62,28 +67,30 @@ class DocumentLoader:
         # --------------------------------
 
         try:
-
-            text = self.text_extractor.extract(
-                file_path
-            )
-
-            text_chunks = (
-                self.chunker.split_text(
-                    text=text
+            if file_path.endswith(
+                (".pdf", ".docx")
+            ):
+                text = self.text_extractor.extract(
+                    file_path
                 )
-            )
 
-            for chunk_text in text_chunks:
-
-                chunk = (
-                    self.chunk_factory
-                    .create_text_chunk(
-                        text=chunk_text,
-                        metadata=metadata
+                text_chunks = (
+                    self.chunker.split_text(
+                        text=text
                     )
                 )
 
-                chunks.append(chunk)
+                for chunk_text in text_chunks:
+
+                    chunk = (
+                        self.chunk_factory
+                        .create_text_chunk(
+                            text=chunk_text,
+                            metadata=metadata
+                        )
+                    )
+
+                    chunks.append(chunk)
 
         except Exception as e:
 
@@ -105,6 +112,12 @@ class DocumentLoader:
 
             for table in extracted_tables:
 
+                table_name = (
+                    self.table_storage.store(
+                    table["dataframe"]
+                    )
+                )
+
                 summary = (
                     self.table_summarizer
                     .summarize(
@@ -118,12 +131,39 @@ class DocumentLoader:
                         summary=summary,
                         metadata={
                             **metadata,
-                            "page": table["page"]
+                            "page": table["page"],
+                            "table_name": table_name
                         }
                     )
                 )
 
                 chunks.append(table_chunk)
+
+                dataframe = table["dataframe"]
+
+                for row_index, row in dataframe.iterrows():
+
+                    row_text = (
+                        self.table_summarizer
+                        .summarize_row(row)
+                    )
+
+                    row_chunk = (
+                        self.chunk_factory
+                        .create_table_row_chunk(
+                            text=row_text,
+                            metadata={
+                                **metadata,
+                                "page": table["page"],
+                                "table_name": table_name,
+                                "row_index": int(row_index)
+                            }
+                        )
+                    )
+
+                    chunks.append(
+                        row_chunk
+                    )
 
         except Exception as e:
 
