@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 
-
 class BaseMemory(ABC):
 
     @abstractmethod
@@ -12,14 +11,11 @@ class BaseMemory(ABC):
         pass
 
     @abstractmethod
-    def get_recent_interactions(
-        self,
-        limit: int = 5
-    )-> list:
+    def get_recent_interactions(self,limit: int = 5)-> list:
         pass
 
     @abstractmethod
-    def get_summaries(self):
+    def get_summaries(self)-> list:
         pass
 
     @abstractmethod

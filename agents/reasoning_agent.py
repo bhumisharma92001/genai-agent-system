@@ -2,76 +2,51 @@ from llm.base_llm import BaseLLM
 from llm.llm_config import LLMConfig
 class ReasoningAgent:
 
-    def __init__(
-        self,
-        llm: BaseLLM
-    ):
-
+    def __init__(self,llm: BaseLLM):
         self.llm = llm
 
-    def answer(
-        self,
-        query: str,
-        chunks: list[dict],
-        config: LLMConfig
-    ) -> str:
-
+    def answer(self,query: str,chunks: list[dict],conversation_history: list[tuple[str, str]],config: LLMConfig) -> str:
         if not query.strip():
-
             raise ValueError(
                 "query cannot be empty"
             )
-
         if not chunks:
-
             return (
                 "I could not find the answer "
                 "in the provided documents."
             )
-
         try:
+            context = "\n\n".join(chunk["text"]for chunk in chunks)
 
-            context = "\n\n".join(
-                chunk["text"]
-                for chunk in chunks
-            )
+            system_prompt = """
+            You are an intelligent document question-answering assistant.
+            Rules:
+            1. Use ONLY the provided context.
+            2. The context may contain:
+                - document text
+                - table summaries
+                - table rows
+            3. Compare the user question carefully with the context.
+            4. Extract the required information accurately.
+            5. When answering, use clear human language.
+            6. Do not return raw chunks unless necessary.
+            7. If the context contains table summaries or table rows,use them to answer accurately.
+            8. Do not use external knowledge.
+            9. Do not make assumptions.
+            10. Present answers in natural language instead of copying raw context whenever possible.
+            11. If the answer is not present in the context,respond exactly:
 
-            prompt = (
-                "You are a document question-answering assistant.\n\n"
+                I could not find the answer in the provided documents.
+        """
 
-                "Use only the information present in the provided context.\n\n"
-
-                "The context may contain plain text, tables, spreadsheets, "
-                "CSV records, Excel rows, or other structured data.\n\n"
-
-                "Answer using the exact information found in the context.\n"
-
-                "Return values directly when they are present in the context.\n"
-
-                "If multiple records satisfy the question, return all relevant values.\n"
-
-                "Do not use external knowledge.\n"
-
-                "Do not make assumptions.\n\n"
-
-                "If the answer is not present in the context, respond exactly:\n"
-
-                "I could not find the answer in the provided documents.\n\n"
-
-                f"Context:\n{context}\n\n"
-
-                f"Question:\n{query}\n\n"
-
-                "Answer:"
-            )
-
-            return self.llm.generate(
-                prompt=prompt,
-                config=config
-            )
+            history_messages = []
+            for query_text, answer_text in conversation_history:
+                history_messages.append({"role": "user","content": query_text})
+                history_messages.append({"role": "assistant","content": answer_text})
+            messages = [{"role": "system","content": system_prompt}]
+            messages.extend(history_messages)
+            messages.append({"role": "user","content": (f"Context:\n{context}\n\n"f"Question:\n{query}")})
+            return self.llm.generate(messages=messages,config=config)
 
         except Exception as e:
-
-            raise RuntimeError(
-                "Failed to generate answer"
-            ) from e
+            raise RuntimeError("Failed to generate answer") from e

@@ -4,40 +4,25 @@ from vector_db.base_vector_db import BaseVectorDB
 
 class ChromaDB(BaseVectorDB):
 
-    def __init__(
-        self,
-        collection_name: str = "documents",
-        persist_path: str = "vector_store"
-    ):
+    def __init__(self,collection_name: str = "documents",persist_path: str = "vector_store"):
         if not collection_name.strip():
-
-            raise ValueError(
-                "collection_name cannot be empty"
-            )
+            raise ValueError("collection_name cannot be empty")
 
         if not persist_path.strip():
-
-            raise ValueError(
-                "persist_path cannot be empty"
-            )
+            raise ValueError("persist_path cannot be empty")
 
         try:
-
-            self.client = chromadb.PersistentClient(
-                    path=persist_path
-            )
+            self.client = chromadb.PersistentClient(path=persist_path)
 
             self.collection = (
                 self.client.get_or_create_collection(
-                    name=collection_name
+                    name=collection_name,
+                    metadata={"hnsw:space": "cosine"}
                 )
             )
 
         except Exception as e:
-
-            raise RuntimeError(
-                "Failed to initialize ChromaDB"
-            ) from e
+            raise RuntimeError("Failed to initialize ChromaDB") from e
 
     def upsert(
         self,
@@ -48,28 +33,16 @@ class ChromaDB(BaseVectorDB):
     ) -> None:
 
         if not ids:
-
-            raise ValueError(
-                "ids cannot be empty"
-            )
+            raise ValueError("ids cannot be empty")
 
         if not embeddings:
-
-            raise ValueError(
-                "embeddings cannot be empty"
-            )
+            raise ValueError("embeddings cannot be empty")
 
         if not documents:
-
-            raise ValueError(
-                "documents cannot be empty"
-            )
+            raise ValueError("documents cannot be empty")
 
         if not metadatas:
-
-            raise ValueError(
-                "metadatas cannot be empty"
-            )
+            raise ValueError("metadatas cannot be empty")
 
         total_records = len(ids)
 
@@ -79,10 +52,7 @@ class ChromaDB(BaseVectorDB):
             or len(metadatas) != total_records
         ):
 
-            raise ValueError(
-                "All input lists must have "
-                "the same length"
-            )
+            raise ValueError("All input lists must have the same length")
 
         try:
 
@@ -94,31 +64,16 @@ class ChromaDB(BaseVectorDB):
             )
 
         except Exception as e:
+            raise RuntimeError("Failed to upsert vectors") from e
 
-            raise RuntimeError(
-                "Failed to upsert vectors"
-            ) from e
-
-    def query(
-        self,
-        embedding: list[float],
-        k: int = 5
-    ) -> dict:
-
+    def query(self,embedding: list[float],k: int = 5) -> dict:
         if not embedding:
-
-            raise ValueError(
-                "embedding cannot be empty"
-            )
+            raise ValueError("embedding cannot be empty")
 
         if k <= 0:
-
-            raise ValueError(
-                "k must be positive"
-            )
+            raise ValueError("k must be positive")
 
         try:
-
             return self.collection.query(
                 query_embeddings=[embedding],
                 n_results=k,
@@ -130,7 +85,4 @@ class ChromaDB(BaseVectorDB):
             )
 
         except Exception as e:
-
-            raise RuntimeError(
-                "Failed to query vectors"
-            ) from e
+            raise RuntimeError("Failed to query vectors") from e
