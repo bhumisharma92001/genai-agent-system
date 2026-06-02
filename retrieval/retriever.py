@@ -1,116 +1,46 @@
+from embeddings.base import BaseEmbedding
 from retrieval.reranker import Reranker
-
+from utils.logger import logger
+from vector_db.base_vector_db import BaseVectorDB
 class Retriever:
 
-    def __init__( self, embedding_model, vector_db, reranker: Reranker ):
+    def __init__( 
         
-        self.embedding_model = (
-            embedding_model
-        )
-
-        self.vector_db = (
-            vector_db
-        )
-
-        self.reranker = (
-            reranker
-        )
-    def keyword_score(
         self,
-        query: str,
-        text: str
-    ) -> int:
-
-        query_words = set(
-            query.lower().split()
-        )
-
-        text_words = set(
-            text.lower().split()
-        )
-
-        return len(
-            query_words.intersection(
-                text_words
-            )
-        )
-
-    def retrieve(
-        self,
-        query: str,
-        k: int = 10
-    ) -> list[dict]:
-
-        if not query.strip():
-
+        embedding_model : BaseEmbedding,
+        vector_db : BaseVectorDB,
+        reranker: Reranker,
+        retrieval_k: int = 20,
+        rerank_k: int = 5
+    ):
+        if rerank_k > retrieval_k:
             raise ValueError(
-                "query cannot be empty"
+                "rerank_k cannot be greater than retrieval_k"
             )
+        self.embedding_model = embedding_model
+        self.vector_db = vector_db
+        self.reranker = reranker
+        self.retrieval_k = retrieval_k
+        self.rerank_k = rerank_k
+        
+    def retrieve(self,query: str,) -> list[dict]:
 
-        if k <= 0:
-
-            raise ValueError(
-                "k must be positive"
-            )
+        if not query or not query.strip():
+            raise ValueError("query cannot be empty")
 
         try:
-
-            query_embedding = (
-                self.embedding_model.embed(query)
-            )
-
-            results = self.vector_db.query(
-                embedding=query_embedding,
-                k=k
-            )
-
+            query_embedding = (self.embedding_model.embed(query))
+            results = self.vector_db.query(embedding=query_embedding,k=self.retrieval_k)
             chunks = []
-
             documents = results["documents"][0]
-
             metadatas = results["metadatas"][0]
 
-            distances = results["distances"][0]
-
-            for document, metadata, distance in zip(
-                documents,
-                metadatas,
-                distances
-            ):
-
-                semantic_score = 1 - distance
-
-                keyword_boost = (
-                    self.keyword_score(
-                        query=query,
-                        text=document
-                    )
-                )
-
-                final_score = (
-                    semantic_score
-                    +
-                    (0.1 * keyword_boost)
-                )
-
-                chunks.append(
-                    {
-                        "text": document,
-                        "metadata": metadata,
-                        "score": final_score
-                    }
-                )
-
-            reranked_chunks = self.reranker.rerank(
-                query=query,
-                chunks=chunks,
-                top_k=10
-            )
-
+            for document, metadata in zip(documents,metadatas):
+                chunks.append({"text": document,"metadata": metadata})
+            reranked_chunks = self.reranker.rerank(query=query,chunks=chunks,top_k=self.rerank_k)
             return reranked_chunks
 
         except Exception as e:
+            logger.exception("Failed to retrieve chunks") 
 
-            raise RuntimeError(
-                "Failed to retrieve chunks"
-            ) from e
+            raise RuntimeError("Failed to retrieve chunks" )from e

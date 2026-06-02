@@ -1,20 +1,11 @@
 from llm.base_llm import BaseLLM
 from llm.llm_config import LLMConfig
 
-
 class SummarizationAgent:
 
-    def __init__(
-        self,
-        llm: BaseLLM
-    ):
+    def __init__(self,llm: BaseLLM):
         self.llm = llm
-
-        self.config = LLMConfig(
-            temperature=0.2,
-            top_p=0.8,
-            max_tokens=256
-        )
+        self.config = LLMConfig(temperature=0.2,top_p=0.8,max_tokens=256)
 
     def summarize(
         self,

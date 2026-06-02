@@ -1,49 +1,26 @@
 from sentence_transformers import SentenceTransformer
-
 from embeddings.base import BaseEmbedding
-
 
 class SentenceTransformerEmbedding(BaseEmbedding):
 
-    def __init__(
-        self,
-        model_name: str = "BAAI/bge-small-en-v1.5"
-    ):
-
+    def __init__(self,model_name: str = "BAAI/bge-small-en-v1.5"):
+        if not model_name or not model_name.strip():
+            raise ValueError("model_name cannot be empty")
         self.model_name = model_name
 
         try:
-
-            self.model = SentenceTransformer(
-                model_name
-            )
+            self.model = SentenceTransformer(model_name)
 
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to load model: "
-                f"{model_name}"
-            ) from e
+            raise RuntimeError(f"Failed to load model: "f"{model_name}") from e
 
-    def embed(
-        self,
-        text: str
-    ) -> list[float]:
+    def embed(self,text: str) -> list[float]:
         if not text or not text.strip():
-
-            raise ValueError(
-                "Input text cannot be empty"
-            )
+            raise ValueError("Input text cannot be empty")
 
         try:
-
-            embedding = self.model.encode(
-                text
-            )
-
+            embedding = self.model.encode(text,normalize_embeddings=True)
             return embedding.tolist()
 
         except Exception as e:
-
-            raise RuntimeError(
-                "Failed to generate embedding"
-            ) from e
+            raise RuntimeError("Failed to generate embedding") from e
