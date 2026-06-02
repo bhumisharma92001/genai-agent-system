@@ -1,9 +1,31 @@
 from memory.base_memory import BaseMemory
-import os
+import threading
+from utils.logger import logger
+
 class MemoryManager:
 
-    def __init__(self,memory : BaseMemory):
+    def __init__(self, memory: BaseMemory, summarization_agent):
         self.memory = memory
+        self.summarization_agent = summarization_agent
+
+    def summarize_in_background(self):
+        thread = threading.Thread(target=self._generate_summary,daemon=True)
+        thread.start()
+
+    def _generate_summary(self):
+        try:
+            interactions = self.memory.get_recent_interactions(limit=5)
+            conversation = "\n".join(
+                f"User: {query}\nAssistant: {answer}"
+                for query, answer in interactions
+            )
+
+            summary = self.summarization_agent.summarize(conversation)
+
+            self.memory.save_summary(summary=summary,facts="")
+
+        except Exception:
+            logger.exception("Background summarizer failed")
 
     def save_interaction(self,query: str,answer: str) -> None:
         self.memory.save_interaction(query=query,answer=answer)
@@ -27,3 +49,4 @@ class MemoryManager:
             )
 
         return context
+        

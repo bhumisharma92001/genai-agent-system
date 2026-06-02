@@ -8,5 +8,5 @@ __pycache__/
 memory/*.db
 vector_store/
 .idea/
-
+app.log
 .vscode/

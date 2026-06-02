@@ -65,17 +65,31 @@ summarization_agent = (SummarizationAgent(llm=llm))
 config = LLMConfig()
 
 memory = EpisodicMemory(db_path=os.getenv("MEMORY_DB_PATH"))
-memory_manager = MemoryManager(memory=memory)
+memory_manager = MemoryManager(memory=memory,summarization_agent=summarization_agent)
+interaction_count = 0   
 
 while True:
     query = input("\nYou: ")
     logger.info(f"User query: {query}")
+
+    if query.lower() == "summary":
+        summaries = memory_manager.get_summaries()
+
+        if summaries:
+            combined_summary = "\n\n".join(
+                summary for summary, _ in reversed(summaries)
+            )
+            print(f"\nSummary:\n{combined_summary}")
+        else:
+            print("\nNo summary available.")
+
+        continue
+
     if query.lower() in ["exit", "bye"]:
         context = (memory_manager.build_context(limit=100))
         summary = (summarization_agent.summarize(context))
-        facts = (summarization_agent.extract_facts(context))
-        logger.info("Saving conversation summary")
-        memory_manager.save_summary(summary=summary,facts=facts)              
+        memory_manager.save_summary(summary=summary,facts="")
+        logger.info("Saving conversation summary")        
         logger.info("Conversation summary saved")
         for row in memory_manager.get_recent_interactions(limit=100):
             print(row)
@@ -95,3 +109,6 @@ while True:
     logger.info("Saving interaction")
     memory_manager.save_interaction(query=query,answer=answer)
     logger.info("Interaction saved")
+    interaction_count += 1
+    if interaction_count % 3 == 0:
+        memory_manager.summarize_in_background()
