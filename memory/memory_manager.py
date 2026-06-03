@@ -14,7 +14,7 @@ class MemoryManager:
 
     def _generate_summary(self):
         try:
-            interactions = self.memory.get_recent_interactions(limit=5)
+            interactions = self.memory.get_recent_interactions(limit=3)
             conversation = "\n".join(
                 f"User: {query}\nAssistant: {answer}"
                 for query, answer in interactions

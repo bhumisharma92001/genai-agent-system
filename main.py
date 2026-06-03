@@ -13,6 +13,7 @@ from ingestion.table_extractor import TableExtractor
 from ingestion.table_summarizer import TableSummarizer
 from ingestion.text_extractor import TextExtractor
 from llm.llm_config import LLMConfig
+from agents.tool_agent import ToolAgent
 from llm.openrouter_llm import OpenRouterLLM
 from memory.episodic_memory import EpisodicMemory
 from memory.memory_manager import MemoryManager
@@ -60,6 +61,7 @@ llm = OpenRouterLLM(
     api_key=os.getenv("OPENROUTER_API_KEY"),
     model_name=os.getenv("OPENROUTER_MODEL")
 )
+tool_agent = ToolAgent()
 reasoning_agent = (ReasoningAgent(llm=llm))
 summarization_agent = (SummarizationAgent(llm=llm))
 config = LLMConfig()
@@ -71,6 +73,10 @@ interaction_count = 0
 while True:
     query = input("\nYou: ")
     logger.info(f"User query: {query}")
+    if tool_agent.should_use_tool(query):
+        result = tool_agent.execute(query)
+        print(f"\nAssistant: {result['result']}")
+        continue
 
     if query.lower() == "summary":
         summaries = memory_manager.get_summaries()
