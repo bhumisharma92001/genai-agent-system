@@ -7,7 +7,12 @@ class ChunkFactory:
         if not text or not text.strip():
             raise ValueError("Chunk text cannot be empty")
 
-        chunk_key = (f"{metadata.get('source', '')}:{text}")
+        chunk_key = (
+            f"{metadata.get('user_id','')}:"
+            f"{metadata.get('doc_id','')}:"
+            f"{metadata.get('source','')}:"
+            f"{text}"
+        )
 
         return {
             "chunk_id":str(uuid.uuid5(uuid.NAMESPACE_DNS,chunk_key)),
@@ -17,7 +22,6 @@ class ChunkFactory:
         }
 
     def create_table_chunk(self,summary: str,metadata: dict) -> dict:
-
         if not summary or not summary.strip():
             raise ValueError("Table summary cannot be empty")
         

@@ -3,18 +3,75 @@ from memory.memory_repository import MemoryRepository
 
 class EpisodicMemory(BaseMemory):
 
-    def __init__(self,db_path: str):
+    def __init__(self, db_path: str):
         self.repository = MemoryRepository(db_path=db_path)
         self.repository.initialize()
 
-    def save_interaction(self,query: str,answer: str) -> None:
-        self.repository.save_interaction(query=query,answer=answer)
+    def create_or_update_session(self, user_id: str, session_id: str) -> None:
+        self.repository.create_or_update_session(user_id=user_id, session_id=session_id)
 
-    def get_recent_interactions(self,limit: int = 5) -> list[tuple[str, str]]:
-        return self.repository.get_recent_interactions(limit=limit)
+    def save_interaction(
+        self,
+        user_id: str,
+        session_id: str,
+        query: str,
+        answer: str,
+        importance_score: int = 1
+    ):
+        self.repository.save_interaction(
+            user_id=user_id,
+            session_id=session_id,
+            query=query,
+            answer=answer,
+            importance_score=importance_score
+        )
 
-    def get_summaries(self) -> list[tuple[str, str]]:
-        return self.repository.get_summaries()
+    def get_recent_interactions(
+        self,
+        user_id: str,
+        session_id: str,
+        limit: int = 5
+    ) -> list[tuple[str, str]]:
+        return self.repository.get_recent_interactions(
+            user_id=user_id,
+            session_id=session_id,
+            limit=limit
+        )
 
-    def save_summary(self,summary: str,facts: str) -> None:
-        self.repository.save_summary(summary=summary,facts=facts)
+    def get_relevant_interactions(
+        self,
+        user_id: str,
+        session_id: str,
+        query: str,
+        limit: int = 5
+    ) -> list[tuple[str, str]]:
+        return self.repository.get_relevant_interactions(
+            user_id=user_id,
+            session_id=session_id,
+            query=query,
+            limit=limit
+        )
+
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str]]:
+        return self.repository.get_summaries(
+            user_id=user_id,
+            session_id=session_id
+        )
+
+    def save_summary(
+        self,
+        user_id: str,
+        session_id: str,
+        summary: str,
+        facts: str
+    ) -> None:
+        self.create_or_update_session(user_id=user_id, session_id=session_id)
+        self.repository.save_summary(
+            user_id=user_id,
+            session_id=session_id,
+            summary=summary,
+            facts=facts
+        )
+
+    def get_last_session_id(self, user_id: str) -> str | None:
+        return self.repository.get_last_session_id(user_id=user_id)

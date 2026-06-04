@@ -9,7 +9,7 @@ class IndexingPipeline:
         self.embedding_model = embedding_model
         self.vector_db = vector_db
 
-    def index_document(self,file_path: str) -> None:
+    def index_document(self, file_path: str, user_id: str, session_id: str):
         chunks = self.loader.load(file_path)
         ids = []
         documents = []
@@ -21,7 +21,7 @@ class IndexingPipeline:
             ids.append(chunk["chunk_id"])
             documents.append(chunk["text"])
             embeddings.append(embedding)
-            metadatas.append(chunk["metadata"])
+            metadatas.append({**chunk["metadata"], "user_id": user_id, "session_id": session_id})
         self.vector_db.upsert(
             ids=ids,
             embeddings=embeddings,
