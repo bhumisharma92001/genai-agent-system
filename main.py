@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 
+from config.runtime_state import RuntimeState
 from agents.reasoning_agent import ReasoningAgent
 from agents.summarization_agent import SummarizationAgent
 from embeddings.sentence_transformer_embedding import SentenceTransformerEmbedding
@@ -45,10 +46,6 @@ pipeline = IndexingPipeline(
     vector_db=vector_db
 )
 
-file_path = input("Enter the path of the document to index:")
-logger.info(f"Started indexing: {file_path}")
-pipeline.index_document(file_path=file_path)
-logger.info(f"Indexed document: {file_path}")
 reranker = Reranker(model_name=os.getenv("RERANKER_MODEL"))
 retriever = Retriever(
     embedding_model=embedding_model,
@@ -67,23 +64,40 @@ summarization_agent = (SummarizationAgent(llm=llm))
 config = LLMConfig()
 
 memory = EpisodicMemory(db_path=os.getenv("MEMORY_DB_PATH"))
-memory_manager = MemoryManager(memory=memory,summarization_agent=summarization_agent)
-interaction_count = 0   
+memory_manager = MemoryManager(memory=memory, summarization_agent=summarization_agent)
+
+runtime = RuntimeState()
+runtime.initialize(memory_manager=memory_manager)
+user_id = runtime.user_id
+session_id = runtime.session_id
+memory_manager.register_session(user_id=user_id, session_id=session_id)
+
+file_path = input("Enter the path of the document to index:")
+logger.info(f"Started indexing: {file_path}")
+pipeline.index_document(file_path=file_path, user_id=user_id, session_id=session_id)
+logger.info(f"Indexed document: {file_path}")
+
+interaction_count = 0
 
 while True:
     query = input("\nYou: ")
     logger.info(f"User query: {query}")
     if query.lower() in ["exit", "bye"]:
-        context = memory_manager.build_context(limit=100)
+        context = memory_manager.build_context(user_id=user_id,session_id=session_id,limit=100)
         summary = summarization_agent.summarize(context)
-        memory_manager.save_summary(summary=summary,facts="")
+        memory_manager.save_summary(
+            user_id=user_id,
+            session_id=session_id,
+            summary=summary,
+            facts=""
+        )
         logger.info("Saving conversation summary")
         logger.info("Conversation summary saved")
         print("\nGoodbye!")
         break
 
     if query.lower() == "summary":
-        summaries = memory_manager.get_summaries()
+        summaries = memory_manager.get_summaries(user_id=user_id,session_id=session_id)
         if summaries:
             combined_summary = "\n\n".join(
                 summary for summary, _ in reversed(summaries)
@@ -99,8 +113,8 @@ while True:
         answer = str(result["result"])
 
     else:
-        chunks = retriever.retrieve(query=query)
-        conversation_history = (memory_manager.get_recent_interactions(limit=10))
+        chunks = retriever.retrieve(query=query, user_id=user_id, session_id=session_id)
+        conversation_history = memory_manager.get_relevant_memory(query=query, user_id=user_id, session_id=session_id)
         answer = reasoning_agent.answer(
             query=query,
             chunks=chunks,
@@ -110,8 +124,14 @@ while True:
     print(f"\nAssistant: {answer}")
     logger.info(f"Answer generated for query: {query}")
     logger.info("Saving interaction")
-    memory_manager.save_interaction(query=query,answer=answer)
+    if memory_manager.should_store(query, answer):
+        memory_manager.save_interaction(
+            user_id=user_id,
+            session_id=session_id,
+            query=query,
+            answer=answer
+        )
     logger.info("Interaction saved")
     interaction_count += 1
     if interaction_count % 3 == 0:
-        memory_manager.summarize_in_background()
+        memory_manager.summarize_in_background(user_id=user_id, session_id=session_id)

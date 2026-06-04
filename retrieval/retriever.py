@@ -5,7 +5,6 @@ from vector_db.base_vector_db import BaseVectorDB
 class Retriever:
 
     def __init__( 
-        
         self,
         embedding_model : BaseEmbedding,
         vector_db : BaseVectorDB,
@@ -23,14 +22,20 @@ class Retriever:
         self.retrieval_k = retrieval_k
         self.rerank_k = rerank_k
         
-    def retrieve(self,query: str,) -> list[dict]:
-
+    def retrieve(self, query: str, user_id: str, session_id: str) -> list[dict]:
         if not query or not query.strip():
             raise ValueError("query cannot be empty")
 
         try:
             query_embedding = (self.embedding_model.embed(query))
-            results = self.vector_db.query(embedding=query_embedding,k=self.retrieval_k)
+            results = self.vector_db.query(embedding=query_embedding,k=self.retrieval_k,
+            where={
+                "$and": [
+                    {"user_id": {"$eq": user_id}},
+                    {"session_id": {"$eq": session_id}}
+                ]
+            }
+            )  
             chunks = []
             documents = results["documents"][0]
             metadatas = results["metadatas"][0]

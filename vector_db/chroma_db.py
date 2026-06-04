@@ -66,7 +66,7 @@ class ChromaDB(BaseVectorDB):
         except Exception as e:
             raise RuntimeError("Failed to upsert vectors") from e
 
-    def query(self,embedding: list[float],k: int = 5) -> dict:
+    def query(self, embedding: list[float], k: int = 5, where: dict = None):
         if not embedding:
             raise ValueError("embedding cannot be empty")
 
@@ -77,11 +77,8 @@ class ChromaDB(BaseVectorDB):
             return self.collection.query(
                 query_embeddings=[embedding],
                 n_results=k,
-                include=[
-                    "documents",
-                    "metadatas",
-                    "distances"
-                ]
+                where=where,
+                include=["documents", "metadatas", "distances"]
             )
 
         except Exception as e:
