@@ -61,7 +61,7 @@ llm = OpenRouterLLM(
     api_key=os.getenv("OPENROUTER_API_KEY"),
     model_name=os.getenv("OPENROUTER_MODEL")
 )
-tool_agent = ToolAgent()
+tool_agent = ToolAgent(llm=llm)
 reasoning_agent = (ReasoningAgent(llm=llm))
 summarization_agent = (SummarizationAgent(llm=llm))
 config = LLMConfig()
@@ -73,14 +73,17 @@ interaction_count = 0
 while True:
     query = input("\nYou: ")
     logger.info(f"User query: {query}")
-    if tool_agent.should_use_tool(query):
-        result = tool_agent.execute(query)
-        print(f"\nAssistant: {result['result']}")
-        continue
+    if query.lower() in ["exit", "bye"]:
+        context = memory_manager.build_context(limit=100)
+        summary = summarization_agent.summarize(context)
+        memory_manager.save_summary(summary=summary,facts="")
+        logger.info("Saving conversation summary")
+        logger.info("Conversation summary saved")
+        print("\nGoodbye!")
+        break
 
     if query.lower() == "summary":
         summaries = memory_manager.get_summaries()
-
         if summaries:
             combined_summary = "\n\n".join(
                 summary for summary, _ in reversed(summaries)
@@ -88,28 +91,22 @@ while True:
             print(f"\nSummary:\n{combined_summary}")
         else:
             print("\nNo summary available.")
-
         continue
 
-    if query.lower() in ["exit", "bye"]:
-        context = (memory_manager.build_context(limit=100))
-        summary = (summarization_agent.summarize(context))
-        memory_manager.save_summary(summary=summary,facts="")
-        logger.info("Saving conversation summary")        
-        logger.info("Conversation summary saved")
-        for row in memory_manager.get_recent_interactions(limit=100):
-            print(row)
-        print("\nGoodbye!")
-        break
+    route = tool_agent.route(query).strip().lower()
+    if "calculator" in route:
+        result = tool_agent.execute(query)
+        answer = str(result["result"])
 
-    chunks = retriever.retrieve(query=query)
-    conversation_history = (memory_manager.get_recent_interactions(limit=10))
-    answer = reasoning_agent.answer(
-        query=query,
-        chunks=chunks,
-        conversation_history=conversation_history,
-        config=config
-    )
+    else:
+        chunks = retriever.retrieve(query=query)
+        conversation_history = (memory_manager.get_recent_interactions(limit=10))
+        answer = reasoning_agent.answer(
+            query=query,
+            chunks=chunks,
+            conversation_history=conversation_history,
+            config=config
+        )
     print(f"\nAssistant: {answer}")
     logger.info(f"Answer generated for query: {query}")
     logger.info("Saving interaction")
