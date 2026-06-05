@@ -56,6 +56,8 @@ class MemoryManager:
     def save_interaction(self, user_id: str, session_id: str, query: str, answer: str) -> None:
         self.register_session(user_id=user_id, session_id=session_id)
         importance = self._get_importance(query, answer)
+        if importance <= 0:
+            return
 
         self.memory.save_interaction(
             user_id=user_id,
@@ -75,7 +77,20 @@ class MemoryManager:
         )
 
     def should_store(self, query: str, answer: str) -> bool:
-        return self._get_importance(query, answer) > 0
+        q = query.strip().lower()
+        if q.isdigit():
+            return False
+
+        if any(op in q for op in ["+", "-", "*", "/"]):
+            return False
+
+        if "could not find" in answer.lower():
+            return False
+
+        if "invalid calculation" in answer.lower():
+            return False
+
+        return True
 
     def get_relevant_memory(self, query, user_id, session_id):
         return self.memory.get_relevant_interactions(

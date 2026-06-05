@@ -5,7 +5,7 @@ class ReasoningAgent:
     def __init__(self,llm: BaseLLM):
         self.llm = llm
 
-    def answer(self,query: str,chunks: list[dict],conversation_history: list[tuple[str, str]],config: LLMConfig) -> str:
+    def answer(self, query: str, chunks: list[dict], conversation_history: list[tuple[str, str]], config: LLMConfig, summaries: list[tuple[str, str]] | None = None) -> str:
         if not query.strip():
             raise ValueError(
                 "query cannot be empty"
@@ -16,7 +16,11 @@ class ReasoningAgent:
                 "in the provided documents."
             )
         try:
-            context = "\n\n".join(chunk["text"]for chunk in chunks)
+            context = "\n\n".join(chunk["text"] for chunk in chunks)
+            summary_text = ""
+            if summaries:
+                summary_text = "\n\n".join(summary for summary, _ in summaries)
+                summary_text = f"Summaries:\n{summary_text}\n\n"
 
             system_prompt = """
             You are an intelligent document question-answering assistant.
@@ -44,9 +48,11 @@ class ReasoningAgent:
                 history_messages.append({"role": "user","content": query_text})
                 history_messages.append({"role": "assistant","content": answer_text})
             messages = [{"role": "system","content": system_prompt}]
+            if summary_text:
+                messages.append({"role": "system","content": summary_text})
             messages.extend(history_messages)
             messages.append({"role": "user","content": (f"Context:\n{context}\n\n"f"Question:\n{query}")})
-            return self.llm.generate(messages=messages,config=config)
+            return self.llm.generate(messages=messages, config=config)
 
         except Exception as e:
             raise RuntimeError("Failed to generate answer") from e
