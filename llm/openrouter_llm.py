@@ -13,18 +13,18 @@ class OpenRouterLLM(BaseLLM):
         self.client = OpenAI(api_key=api_key,base_url="https://openrouter.ai/api/v1")
         self.model_name = model_name
 
-    def generate(self,messages: list[dict],config : LLMConfig) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            temperature=config.temperature,
-            top_p=config.top_p,
-            max_tokens=config.max_tokens
-        )
-
-        return (
-            response
-            .choices[0]
-            .message
-            .content
-        )
+    def generate(self, messages: list[dict], config: LLMConfig) -> str:
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=config.temperature,
+                top_p=config.top_p,
+                max_tokens=config.max_tokens
+            )
+            content = response.choices[0].message.content
+            if not content:
+                raise RuntimeError("LLM returned empty response")
+            return content
+        except Exception as e:
+            raise RuntimeError("LLM generation failed") from e

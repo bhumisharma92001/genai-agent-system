@@ -27,7 +27,7 @@ class Retriever:
             raise ValueError("query cannot be empty")
 
         try:
-            query_embedding = (self.embedding_model.embed(query))
+            query_embedding = self.embedding_model.embed(query, is_query=True)
             results = self.vector_db.query(embedding=query_embedding,k=self.retrieval_k,
             where={
                 "$and": [
@@ -36,16 +36,26 @@ class Retriever:
                 ]
             }
             )  
-            chunks = []
-            documents = results["documents"][0]
-            metadatas = results["metadatas"][0]
+            documents = results.get("documents") or []
+            documents = documents[0] if documents and isinstance(documents[0], list) else (documents if documents else [])
+            
+            metadatas = results.get("metadatas") or []
+            metadatas = metadatas[0] if metadatas and isinstance(metadatas[0], list) else (metadatas if metadatas else [])
 
+            if not documents:
+                logger.info("No documents found in Vector DB for the given user session parameters.")
+                return []
+
+            chunks = []
             for document, metadata in zip(documents,metadatas):
                 chunks.append({"text": document,"metadata": metadata})
+
+            if not chunks:
+                return []
+
             reranked_chunks = self.reranker.rerank(query=query,chunks=chunks,top_k=self.rerank_k)
             return reranked_chunks
 
         except Exception as e:
             logger.exception("Failed to retrieve chunks") 
-
-            raise RuntimeError("Failed to retrieve chunks" )from e
+            raise RuntimeError("Failed to retrieve chunks") from e
