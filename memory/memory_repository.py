@@ -1,5 +1,6 @@
 import sqlite3
 import threading
+from contextlib import contextmanager
 
 class MemoryRepository:
 
@@ -7,10 +8,24 @@ class MemoryRepository:
         self.db_path = db_path
         self._lock = threading.Lock()
 
+    @contextmanager
     def _get_connection(self):
-        return sqlite3.connect(self.db_path, check_same_thread=False)
+        """
+        Custom context manager that handles proper connection cleanup 
+        AND native SQLite transaction rollback/commit lifecycles.
+        """
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def initialize(self) -> None:
+        # Transactions are handled automatically by the custom context manager
         with self._get_connection() as conn:
             conn.execute(
                 """
@@ -25,7 +40,6 @@ class MemoryRepository:
                 )
                 """
             )
-
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_summaries(
@@ -33,12 +47,10 @@ class MemoryRepository:
                     user_id TEXT NOT NULL,
                     session_id TEXT NOT NULL,
                     summary TEXT NOT NULL,
-                    facts TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
-
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS user_sessions(
@@ -49,11 +61,8 @@ class MemoryRepository:
                 """
             )
 
-            conn.commit()
-
     def create_or_update_session(self, user_id: str, session_id: str) -> None:
         with self._lock, self._get_connection() as conn:
-            # upsert last session for the user so we can resume by user_id
             conn.execute(
                 """
                 INSERT INTO user_sessions(user_id, last_session_id, updated_at)
@@ -64,7 +73,6 @@ class MemoryRepository:
                 """,
                 (user_id, session_id)
             )
-            conn.commit()
 
     def get_last_session_id(self, user_id: str) -> str | None:
         with self._lock, self._get_connection() as conn:
@@ -77,7 +85,6 @@ class MemoryRepository:
                 """,
                 (user_id,)
             ).fetchone()
-
         return row[0] if row else None
 
     def save_interaction(
@@ -91,24 +98,11 @@ class MemoryRepository:
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO interactions(
-                    user_id,
-                    session_id,
-                    query,
-                    answer,
-                    importance_score
-                )
+                INSERT INTO interactions(user_id, session_id, query, answer, importance_score)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (
-                    user_id,
-                    session_id,
-                    query,
-                    answer,
-                    importance_score,
-                )
+                (user_id, session_id, query, answer, importance_score)
             )
-            conn.commit()
 
     def get_recent_interactions(
         self,
@@ -119,15 +113,33 @@ class MemoryRepository:
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT query, answer
-                FROM interactions
-                WHERE user_id = ? AND session_id = ?
-                ORDER BY id DESC
-                LIMIT ?
+                SELECT query, answer FROM (
+                    SELECT id, query, answer
+                    FROM interactions
+                    WHERE user_id = ? AND session_id = ? AND importance_score > 0
+                    ORDER BY id DESC
+                    LIMIT ?
+                ) ORDER BY id ASC
                 """,
                 (user_id, session_id, limit)
             ).fetchall()
+        return rows
 
+    def get_interactions_after_timestamp(
+        self,
+        user_id: str,
+        session_id: str,
+        timestamp: str
+    ) -> list[tuple[str, str]]:
+        with self._lock, self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT query, answer FROM interactions
+                WHERE user_id = ? AND session_id = ? AND created_at > ? AND importance_score > 0
+                ORDER BY id ASC
+                """,
+                (user_id, session_id, timestamp)
+            ).fetchall()
         return rows
 
     def get_relevant_interactions(
@@ -137,18 +149,36 @@ class MemoryRepository:
         query: str,
         limit: int = 5
     ) -> list[tuple[str, str]]:
+        keywords = [f"%{word}%" for word in query.lower().split() if len(word) > 3]
         with self._lock, self._get_connection() as conn:
+            if keywords:
+                like_clauses = " OR ".join(["LOWER(query) LIKE ?" for _ in keywords])
+                sql = f"""
+                    SELECT query, answer FROM (
+                        SELECT id, query, answer
+                        FROM interactions
+                        WHERE user_id = ? AND session_id = ? AND importance_score > 0
+                        AND ({like_clauses})
+                        ORDER BY importance_score DESC, id DESC
+                        LIMIT ?
+                    ) ORDER BY id ASC
+                """
+                rows = conn.execute(sql, (user_id, session_id, *keywords, limit)).fetchall()
+                if rows:
+                    return rows
+
             rows = conn.execute(
                 """
-                SELECT query, answer
-                FROM interactions
-                WHERE user_id = ? AND session_id = ? AND importance_score > 0
-                ORDER BY importance_score DESC, id DESC
-                LIMIT ?
+                SELECT query, answer FROM (
+                    SELECT id, query, answer
+                    FROM interactions
+                    WHERE user_id = ? AND session_id = ? AND importance_score > 0
+                    ORDER BY importance_score DESC, id DESC
+                    LIMIT ?
+                ) ORDER BY id ASC
                 """,
                 (user_id, session_id, limit)
             ).fetchall()
-
         return rows
 
     def save_summary(
@@ -156,38 +186,25 @@ class MemoryRepository:
         user_id: str,
         session_id: str,
         summary: str,
-        facts: str
     ) -> None:
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO memory_summaries(
-                    user_id,
-                    session_id,
-                    summary,
-                    facts
-                )
-                VALUES (?, ?, ?, ?)
+                INSERT INTO memory_summaries(user_id, session_id, summary)
+                VALUES (?, ?, ?)
                 """,
-                (
-                    user_id,
-                    session_id,
-                    summary,
-                    facts,
-                )
+                (user_id, session_id, summary)
             )
-            conn.commit()
 
-    def get_summaries(self, user_id: str, session_id: str):
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str, str]]:
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT summary, facts
+                SELECT summary, created_at
                 FROM memory_summaries
                 WHERE user_id = ? AND session_id = ?
                 ORDER BY id DESC
                 """,
                 (user_id, session_id)
             ).fetchall()
-
         return rows

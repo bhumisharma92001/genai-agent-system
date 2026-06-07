@@ -1,16 +1,12 @@
 import pdfplumber
 from docx import Document
 from pathlib import Path
-import pandas as pd
 
 class TextExtractor:
     def __init__(self):
         self.handlers = {
             ".pdf": self._extract_pdf_text,
             ".docx": self._extract_docx_text,
-            ".csv": self._extract_csv_text,
-            ".xlsx": self._extract_excel_text,
-            ".xls": self._extract_excel_text
         }
 
     def extract(self,file_path: str) -> str:
@@ -33,7 +29,6 @@ class TextExtractor:
 
     def _extract_pdf_text(self,file_path: str) -> str:
         extracted_texts = []
-
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages:
@@ -57,11 +52,3 @@ class TextExtractor:
 
         except Exception as e:
             raise RuntimeError("Failed to extract DOCX text") from e
-
-    def _extract_csv_text(self,file_path: str) -> str:
-        dataframe = pd.read_csv(file_path)
-        return dataframe.to_string(index=False)
-
-    def _extract_excel_text(self,file_path: str) -> str:
-        dataframe = pd.read_excel(file_path)
-        return dataframe.to_string(index=False)

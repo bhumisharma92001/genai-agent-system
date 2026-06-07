@@ -10,13 +10,14 @@ class BaseVectorDB(ABC):
         embeddings: list[list[float]],
         documents: list[str],
         metadatas: list[dict]
-    )-> None:
+    ) -> None:
         pass
 
     @abstractmethod
     def query(
         self,
         embedding: list[float],
-        k: int = 5
+        k: int = 5,
+        where: dict | None = None
     ) -> dict:
         pass
