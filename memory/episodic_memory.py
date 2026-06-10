@@ -46,12 +46,11 @@ class EpisodicMemory(BaseMemory):
             user_id=user_id, session_id=session_id, query=query, limit=limit
         )
 
-    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str, str]]:
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str]]:
         return self.repository.get_summaries(user_id=user_id, session_id=session_id)
 
-    def save_summary(
-        self, user_id: str, session_id: str, summary: str) -> None:
-            self.repository.save_summary(user_id=user_id, session_id=session_id, summary=summary)
+    def save_summary(self, user_id: str, session_id: str, summary: str) -> None:
+        self.repository.save_summary(user_id=user_id, session_id=session_id, summary=summary)
 
     def get_last_session_id(self, user_id: str) -> str | None:
         return self.repository.get_last_session_id(user_id=user_id)

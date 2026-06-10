@@ -25,7 +25,7 @@ class BaseMemory(ABC):
         pass
 
     @abstractmethod
-    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str, str]]:
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str]]:
         pass
 
     @abstractmethod

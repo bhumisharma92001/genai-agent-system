@@ -1,6 +1,8 @@
 import sqlite3
 import threading
 from contextlib import contextmanager
+from utils.logger import logger
+from exceptions.custom_errors import MemoryError
 
 class MemoryRepository:
 
@@ -25,41 +27,39 @@ class MemoryRepository:
             conn.close()
 
     def initialize(self) -> None:
-        # Transactions are handled automatically by the custom context manager
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS interactions(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    session_id TEXT NOT NULL,
-                    query TEXT NOT NULL,
-                    answer TEXT NOT NULL,
-                    importance_score INTEGER DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS memory_summaries(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    session_id TEXT NOT NULL,
-                    summary TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS user_sessions(
-                    user_id TEXT PRIMARY KEY,
-                    last_session_id TEXT NOT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
+        try:
+            with self._get_connection() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS interactions(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        session_id TEXT NOT NULL,
+                        query TEXT NOT NULL,
+                        answer TEXT NOT NULL,
+                        importance_score INTEGER DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS memory_summaries(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        session_id TEXT NOT NULL,
+                        summary TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(user_id, session_id)
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS user_sessions(
+                        user_id TEXT PRIMARY KEY,
+                        last_session_id TEXT NOT NULL,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+        except Exception as e:
+            logger.error(f"DB initialization failed: {str(e)}")
+            raise MemoryError(f"Failed to initialize memory DB: {e}") from e
 
     def create_or_update_session(self, user_id: str, session_id: str) -> None:
         with self._lock, self._get_connection() as conn:
@@ -135,7 +135,7 @@ class MemoryRepository:
             rows = conn.execute(
                 """
                 SELECT query, answer FROM interactions
-                WHERE user_id = ? AND session_id = ? AND created_at > ? AND importance_score > 0
+                WHERE user_id = ? AND session_id = ? AND created_at >=? AND importance_score > 0
                 ORDER BY id ASC
                 """,
                 (user_id, session_id, timestamp)
@@ -190,13 +190,16 @@ class MemoryRepository:
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO memory_summaries(user_id, session_id, summary)
-                VALUES (?, ?, ?)
+                INSERT INTO memory_summaries(user_id, session_id, summary, created_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, session_id) DO UPDATE SET
+                    summary = excluded.summary,
+                    created_at = CURRENT_TIMESTAMP
                 """,
                 (user_id, session_id, summary)
             )
 
-    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str, str]]:
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str]]:
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(
                 """

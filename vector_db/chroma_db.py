@@ -1,19 +1,19 @@
 import chromadb
 
 from vector_db.base_vector_db import BaseVectorDB
+from utils.logger import logger
+from exceptions.custom_errors import VectorDBError, InvalidInputError, ModelLoadError
 
 class ChromaDB(BaseVectorDB):
 
     def __init__(self,collection_name: str = "documents",persist_path: str = "vector_store"):
-        if not collection_name.strip():
-            raise ValueError("collection_name cannot be empty")
-
-        if not persist_path.strip():
-            raise ValueError("persist_path cannot be empty")
+        if not collection_name or not collection_name.strip():
+            raise InvalidInputError("collection_name cannot be empty")
+        if not persist_path or not persist_path.strip():
+            raise InvalidInputError("persist_path cannot be empty")
 
         try:
             self.client = chromadb.PersistentClient(path=persist_path)
-
             self.collection = (
                 self.client.get_or_create_collection(
                     name=collection_name,
@@ -21,8 +21,10 @@ class ChromaDB(BaseVectorDB):
                 )
             )
 
+            logger.info(f"ChromaDB initialized: collection='{collection_name}', path='{persist_path}'")
         except Exception as e:
-            raise RuntimeError("Failed to initialize ChromaDB") from e
+            logger.error(f"ChromaDB initialization failed: {str(e)}")
+            raise ModelLoadError(f"Failed to initialize ChromaDB: {e}") from e
 
     def upsert(
         self,
@@ -33,29 +35,19 @@ class ChromaDB(BaseVectorDB):
     ) -> None:
 
         if not ids:
-            raise ValueError("ids cannot be empty")
-
+            raise InvalidInputError("ids cannot be empty")
         if not embeddings:
-            raise ValueError("embeddings cannot be empty")
-
+            raise InvalidInputError("embeddings cannot be empty")
         if not documents:
-            raise ValueError("documents cannot be empty")
-
+            raise InvalidInputError("documents cannot be empty")
         if not metadatas:
-            raise ValueError("metadatas cannot be empty")
+            raise InvalidInputError("metadatas cannot be empty")
 
         total_records = len(ids)
-
-        if (
-            len(embeddings) != total_records
-            or len(documents) != total_records
-            or len(metadatas) != total_records
-        ):
-
-            raise ValueError("All input lists must have the same length")
+        if len(embeddings) != total_records or len(documents) != total_records or len(metadatas) != total_records:
+            raise InvalidInputError("All input lists must have the same length")
 
         try:
-
             self.collection.upsert(
                 ids=ids,
                 embeddings=embeddings,
@@ -63,15 +55,18 @@ class ChromaDB(BaseVectorDB):
                 metadatas=metadatas
             )
 
+        except InvalidInputError:
+            raise
         except Exception as e:
-            raise RuntimeError("Failed to upsert vectors") from e
-
-    def query(self, embedding: list[float], k: int = 5, where: dict = None):
+            logger.error(f"ChromaDB upsert failed: {str(e)}")
+            raise VectorDBError(f"Failed to upsert vectors: {e}") from e
+        
+    def query(self, embedding: list[float], k: int = 5, where: dict | None = None) -> dict:
         if not embedding:
-            raise ValueError("embedding cannot be empty")
+            raise InvalidInputError("embedding cannot be empty")
 
         if k <= 0:
-            raise ValueError("k must be positive")
+            raise InvalidInputError("k must be positive")
 
         try:
             return self.collection.query(
@@ -81,5 +76,8 @@ class ChromaDB(BaseVectorDB):
                 include=["documents", "metadatas", "distances"]
             )
 
+        except InvalidInputError:
+            raise
         except Exception as e:
-            raise RuntimeError("Failed to query vectors") from e
+            logger.error(f"ChromaDB query failed: {str(e)}")
+            raise VectorDBError(f"Failed to query vectors: {e}") from e

@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pdfplumber
 import pandas as pd
+from utils.logger import logger
+from exceptions.custom_errors import ExtractionError, InvalidInputError
 
 class TableExtractor:
 
@@ -66,4 +68,5 @@ class TableExtractor:
             return [{"dataframe": dataframe,"page": 1}]
 
         except Exception as e:
-            raise RuntimeError("Failed to extract dataframe tables") from e
+            logger.error(f"Dataframe extraction failed: {str(e)}")
+            raise ExtractionError(f"Failed to extract dataframe tables: {e}") from e

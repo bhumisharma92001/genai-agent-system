@@ -1,10 +1,12 @@
 import pandas as pd
+from utils.logger import logger
+from exceptions.custom_errors import ExtractionError, InvalidInputError
 
 class TableSummarizer:
 
     def summarize(self,dataframe: pd.DataFrame) -> str:
         if dataframe.empty:
-            raise ValueError("Dataframe is empty")
+            raise InvalidInputError("Dataframe is empty")
 
         try:
             columns = list(dataframe.columns)
@@ -33,11 +35,20 @@ class TableSummarizer:
 
             return summary
 
+        except InvalidInputError:
+            raise
         except Exception as e:
-            raise RuntimeError("Failed to summarize table") from e
+            logger.error(f"Table summarization failed: {str(e)}")
+            raise ExtractionError(f"Failed to summarize table: {e}") from e
 
     def summarize_row(self,row: pd.Series) -> str:
-        values = []
-        for column, value in row.items():
-            values.append(f"{column}: {value}")
-        return ", ".join(values)
+        if row is None or row.empty:
+            raise InvalidInputError("Row is empty")
+        try:
+            values = []
+            for column, value in row.items():
+                values.append(f"{column}: {value}")
+            return ", ".join(values)
+        except Exception as e:
+            logger.error(f"Row summarization failed: {str(e)}")
+            raise ExtractionError(f"Failed to summarize row: {e}") from e

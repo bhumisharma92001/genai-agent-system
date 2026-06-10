@@ -5,6 +5,7 @@ from ingestion.chunker import TextChunker
 from ingestion.chunk_factory import ChunkFactory
 from ingestion.table_summarizer import TableSummarizer
 from utils.logger import logger
+from exceptions.custom_errors import DocumentLoadError, InvalidInputError
 
 class DocumentLoader:
 
@@ -55,11 +56,15 @@ class DocumentLoader:
                             metadata=metadata
                         )
                         chunks.append(chunk)
+            except InvalidInputError:
+                raise
             except Exception as e:
-                raise RuntimeError("Failed to process text") from e
+                logger.error(f"Text processing failed for: {file_path} — {str(e)}")
+                raise DocumentLoadError(f"Failed to process text: {e}") from e
         else:
             logger.info(f"Skipping text extraction for structured spreadsheet to avoid redundancy: {file_extension}")
         logger.info("Extracting tables/structured data")
+
         try:
             extracted_tables = self.table_extractor.extract(file_path)
             for table in extracted_tables:
@@ -87,7 +92,11 @@ class DocumentLoader:
                     )
                     chunks.append(row_chunk)
 
+        except InvalidInputError:
+            raise
         except Exception as e:
-            raise RuntimeError("Failed to process tables") from e
+            logger.error(f"Table processing failed for: {file_path} — {str(e)}")
+            raise DocumentLoadError(f"Failed to process tables: {e}") from e
+
         logger.info(f"Created {len(chunks)} chunks")
         return chunks
