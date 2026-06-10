@@ -1,7 +1,5 @@
 import uuid
-import logging
-
-logger = logging.getLogger(__name__)
+from utils.logger import logger
 
 class RuntimeState:
 
@@ -13,12 +11,12 @@ class RuntimeState:
         if not self.user_id:
             raise ValueError("User ID cannot be empty")
 
-        # Auto-resume last session for this user if available; otherwise create new
         last_session = None
         if memory_manager is not None:
             try:
                 last_session = memory_manager.get_last_session_id(self.user_id)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Could not resume last session: {e}. Starting fresh.")
                 last_session = None
 
         if last_session:
