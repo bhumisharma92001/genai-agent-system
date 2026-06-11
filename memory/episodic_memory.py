@@ -16,7 +16,7 @@ class EpisodicMemory(BaseMemory):
         query: str,
         answer: str,
         importance_score: int = 1
-    ):
+    )-> None:
         self.repository.save_interaction(
             user_id=user_id,
             session_id=session_id,

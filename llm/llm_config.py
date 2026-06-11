@@ -7,7 +7,7 @@ class LLMConfig:
         top_p: float = 0.9,
         max_tokens: int = 512
     ):
-        if not 0 <= temperature <= 1:
+        if not 0 <= temperature <= 2.0:
             raise ConfigurationError("temperature must be between 0 and 1")
         if not 0 <= top_p <= 1:
             raise ConfigurationError("top_p must be between 0 and 1")
