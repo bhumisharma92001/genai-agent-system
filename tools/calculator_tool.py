@@ -1,9 +1,9 @@
 import ast
-import re
 import operator
-from tools.base_tool import BaseTool
+import re
+from exceptions.custom_errors import ToolExecutionError
 
-OPERATORS = {
+_OPS = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
     ast.Mult: operator.mul,
@@ -11,44 +11,51 @@ OPERATORS = {
     ast.USub: operator.neg,
 }
 
-def _safe_eval(expression: str):
-    try:
-        tree = ast.parse(expression.strip(), mode='eval')
-    except SyntaxError:
-        raise ValueError("Invalid expression")
 
+def _safe_eval(expr: str) -> float:
     def _eval(node):
         if isinstance(node, ast.Expression):
             return _eval(node.body)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return node.value
-        elif isinstance(node, ast.BinOp) and type(node.op) in OPERATORS:
-            return OPERATORS[type(node.op)](_eval(node.left), _eval(node.right))
-        elif isinstance(node, ast.UnaryOp) and type(node.op) in OPERATORS:
-            return OPERATORS[type(node.op)](_eval(node.operand))
-        raise ValueError("Unsupported operation")
+        if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
+            return _OPS[type(node.op)](_eval(node.left), _eval(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _OPS:
+            return _OPS[type(node.op)](_eval(node.operand))
+        raise ToolExecutionError("Unsupported operation")
 
-    return _eval(tree)
+    try:
+        return _eval(ast.parse(expr.strip(), mode="eval"))
+    except ToolExecutionError:
+        raise
+    except Exception as e:
+        raise ToolExecutionError(f"Invalid expression: {e}") from e
 
 
-class CalculatorTool(BaseTool):
+def calculator(query: str) -> str:
+    """Evaluate arithmetic expressions from natural language."""
+    try:
+        q = query.lower()
+        for word, sym in [
+            ("plus", "+"),
+            ("minus", "-"),
+            ("multiplied by", "*"),
+            ("times", "*"),
+            ("divided by", "/"),
+            ("add", "+"),
+            ("and", "+"),
+        ]:
+            q = q.replace(word, sym)
 
-    def execute(self, params: dict) -> dict:
-        try:
-            query = params["query"].lower().strip()
+        expr = "".join(re.findall(r"[\d+\-*/().\s]+", q))
+        if not expr.strip():
+            return "Calculation error: No valid expression found in query."
 
-            replacements = [
-                ("plus", "+"), ("minus", "-"),
-                ("multiplied by", "*"), ("multiply", "*"), ("times", "*"),
-                ("divided by", "/"), ("divide", "/"),
-                ("add", "+"), ("and", "+"),
-            ]
-            for word, symbol in replacements:
-                query = query.replace(word, symbol)
+        result = _safe_eval(expr)
+        formatted = str(round(float(result), 6)).rstrip("0").rstrip(".")
+        return formatted
 
-            expression = "".join(re.findall(r'[\d\+\-\*/\(\)\.\s]+', query))
-            result = _safe_eval(expression)
-            return {"result": result}
-
-        except Exception:
-            return {"result": "Invalid calculation"}
+    except ToolExecutionError as e:
+        return f"Calculation error: {e}"
+    except Exception as e:
+        return f"Calculation error: Unexpected failure — {e}"

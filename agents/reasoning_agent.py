@@ -1,49 +1,84 @@
+from typing import Iterator
 from utils.logger import logger
 from llm.base_llm import BaseLLM
 from llm.llm_config import LLMConfig
 from exceptions.custom_errors import ReasoningGenerationError, InvalidQueryError
 from prompts.reasoning_prompts import get_reasoning_system_prompt
 
+
 class ReasoningAgent:
+
     def __init__(self, llm: BaseLLM):
         self.llm = llm
 
-    def _format_context(self, chunks: list[dict]) -> str:
-        """Constructs a clean context string for the LLM."""
-        extracted = []
-        for chunk in chunks:
-            text = chunk.get("text") or chunk.get("page_content") or str(chunk)
-            meta = chunk.get("metadata", {})
-            header = f"[Source: {meta.get('source', 'Unknown')}, Page: {meta.get('page_number', '')}]"
-            extracted.append(f"{header}\n{text}")
-        return "\n\n".join(extracted)
+    def _build_context(self, chunks: list[dict]) -> str:
+        """
+        Build a rich context string from retrieved chunks.
+        Table chunks get a structured label so LLM knows they contain data rows.
+        """
+        parts = []
+        for c in chunks:
+            source = c.get("metadata", {}).get("source", "Unknown")
+            chunk_type = c.get("metadata", {}).get("chunk_type", "text")
+            text = c.get("text", str(c))
 
-    def answer(self, query: str, chunks: list[dict], history: list[tuple[str, str]], config: LLMConfig) -> str:
+            if chunk_type in ("table", "table_row"):
+                parts.append(f"[TABLE DATA — Source: {source}]\n{text}")
+            else:
+                parts.append(f"[Source: {source}]\n{text}")
+
+        return "\n\n".join(parts)
+
+    def _build_history(self, history: list[tuple]) -> str:
+        """
+        Build conversation history string.
+        Each tuple is (query, answer). Labelled clearly for pronoun resolution.
+        """
+        if not history:
+            return ""
+        lines = []
+        for q, a in history:
+            lines.append(f"User: {q}")
+            lines.append(f"Assistant: {a}")
+        return "\n".join(lines)
+
+    def _messages(self, query: str, chunks: list[dict], history: list[tuple]) -> list[dict]:
+        context = self._build_context(chunks)
+        history_text = self._build_history(history)
+        return [
+            {"role": "system", "content": get_reasoning_system_prompt(context, history_text)},
+            {"role": "user", "content": f"Question: {query}"},
+        ]
+
+    def answer(self, query: str, chunks: list[dict], history: list[tuple], config: LLMConfig) -> str:
         if not query or not query.strip():
             raise InvalidQueryError("Query cannot be empty.")
-            
         if not chunks:
             return "I could not find the answer in the provided documents."
-            
         try:
-            context = self._format_context(chunks)
-            history_text = "\n".join(f"User: {q}\nAssistant: {a}" for q, a in history) if history else ""            
-            system_prompt = get_reasoning_system_prompt(context, history_text)
-            
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Question: {query}"}
-            ]
-            
-            response = self.llm.generate(messages=messages, config=config)
-            
-            if not response:
+            resp = self.llm.generate(messages=self._messages(query, chunks, history), config=config)
+            if not resp:
                 raise ReasoningGenerationError("LLM returned empty response.")
-                
-            return response.strip()
-
-        except InvalidQueryError:
+            return resp.strip()
+        except (InvalidQueryError, ReasoningGenerationError):
             raise
         except Exception as e:
-            logger.error(f"ReasoningAgent critical failure: {str(e)}")
-            raise ReasoningGenerationError(f"Generation process failed: {e}") from e
+            logger.error(f"ReasoningAgent failed: {e}")
+            raise ReasoningGenerationError(f"Generation failed: {e}") from e
+
+    def stream_answer(
+        self, query: str, chunks: list[dict], history: list[tuple], config: LLMConfig
+    ) -> Iterator[str]:
+        if not query or not query.strip():
+            raise InvalidQueryError("Query cannot be empty.")
+        if not chunks:
+            yield "I could not find the answer in the provided documents."
+            return
+        try:
+            for token in self.llm.stream(
+                messages=self._messages(query, chunks, history), config=config
+            ):
+                yield token
+        except Exception as e:
+            logger.error(f"ReasoningAgent stream failed: {e}")
+            raise ReasoningGenerationError(f"Streaming failed: {e}") from e

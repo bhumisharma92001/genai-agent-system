@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from openai import OpenAI
 from llm.llm_config import LLMConfig
 from llm.base_llm import BaseLLM
@@ -6,34 +7,39 @@ from exceptions.custom_errors import LLMGenerationError, InvalidInputError
 
 class OpenRouterLLM(BaseLLM):
 
-    def __init__(self,api_key: str,model_name: str ):
-        if not api_key or not api_key.strip():
-            raise InvalidInputError("OPENROUTER_API_KEY cannot be empty")
-        if not model_name or not model_name.strip():
-            raise InvalidInputError("model_name cannot be empty")
-        self.client = OpenAI(api_key=api_key,base_url="https://openrouter.ai/api/v1")
+    def __init__(self, api_key: str, model_name: str):
+        if not api_key or not model_name:
+            raise InvalidInputError("api_key and model_name are required")
+        self.client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
         self.model_name = model_name
+
+    def _base_params(self, messages: list[dict], config: LLMConfig) -> dict:
+        return dict(model=self.model_name, messages=messages,
+                    temperature=config.temperature, top_p=config.top_p,
+                    max_tokens=config.max_tokens)
 
     def generate(self, messages: list[dict], config: LLMConfig) -> str:
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=config.temperature,
-                top_p=config.top_p,
-                max_tokens=config.max_tokens
-            )
-
-            finish_reason = response.choices[0].finish_reason
-            if finish_reason != "stop":
-                logger.warning(f"Generation stopped with reason: {finish_reason}")
-
-            content = response.choices[0].message.content
+            resp = self.client.chat.completions.create(**self._base_params(messages, config))
+            if resp.choices[0].finish_reason != "stop":
+                logger.warning(f"finish_reason: {resp.choices[0].finish_reason}")
+            content = resp.choices[0].message.content
             if not content:
-                raise LLMGenerationError("LLM returned empty response")
+                raise LLMGenerationError("Empty response from LLM")
             return content
         except LLMGenerationError:
             raise
         except Exception as e:
-            logger.error(f"LLM API Call failed: {str(e)}")
+            logger.error(f"LLM generate failed: {e}")
             raise LLMGenerationError(f"LLM generation failed: {e}") from e
+
+    def stream(self, messages: list[dict], config: LLMConfig) -> Iterator[str]:
+        try:
+            resp = self.client.chat.completions.create(**self._base_params(messages, config), stream=True)
+            for chunk in resp:
+                token = chunk.choices[0].delta.content
+                if token:
+                    yield token
+        except Exception as e:
+            logger.error(f"LLM stream failed: {e}")
+            raise LLMGenerationError(f"LLM streaming failed: {e}") from e
