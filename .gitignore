@@ -1,0 +1,12 @@
+venv/
+
+__pycache__/
+
+*.pyc
+
+.env
+memory/*.db
+vector_store/
+.idea/
+app.log
+.vscode/
