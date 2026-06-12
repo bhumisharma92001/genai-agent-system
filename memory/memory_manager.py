@@ -2,10 +2,12 @@ from utils.logger import logger
 from memory.base_memory import BaseMemory
 from memory.interaction_filter import InteractionFilter
 from memory.memory_summarizer import MemorySummarizer
+from agents.summarization_agent import SummarizationAgent
+
 
 class MemoryManager:
 
-    def __init__(self, memory: BaseMemory, summarization_agent):
+    def __init__(self, memory: BaseMemory, summarization_agent: SummarizationAgent):
         self.memory = memory
         self._filter = InteractionFilter()
         self._summarizer = MemorySummarizer(
@@ -22,11 +24,8 @@ class MemoryManager:
     def save_interaction(self, user_id: str, session_id: str, query: str, answer: str) -> None:
         importance = self._filter.get_importance(query, answer)
         self.memory.save_interaction(
-            user_id=user_id,
-            session_id=session_id,
-            query=query,
-            answer=answer,
-            importance_score=importance
+            user_id=user_id, session_id=session_id,
+            query=query, answer=answer, importance_score=importance
         )
 
     def should_store(self, query: str, answer: str) -> bool:
@@ -42,6 +41,9 @@ class MemoryManager:
 
     def get_last_session_id(self, user_id: str) -> str | None:
         return self.memory.get_last_session_id(user_id=user_id)
+
+    def get_all_sessions(self, user_id: str) -> list[tuple[str, str, str]]:
+        return self.memory.get_all_sessions(user_id=user_id)
 
     def get_relevant_memory(self, query: str, user_id: str, session_id: str) -> list:
         interactions = self.memory.get_relevant_interactions(

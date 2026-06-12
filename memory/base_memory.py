@@ -17,7 +17,7 @@ class BaseMemory(ABC):
         pass
 
     @abstractmethod
-    def get_interactions_after_timestamp(self, user_id: str, session_id: str, timestamp: str) -> list[tuple[str, str]]:
+    def get_interactions_after_id(self, user_id: str, session_id: str, last_id: int) -> list[tuple[str, str]]:
         pass
 
     @abstractmethod
@@ -25,13 +25,21 @@ class BaseMemory(ABC):
         pass
 
     @abstractmethod
-    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str]]:
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, int]]:
         pass
 
     @abstractmethod
-    def save_summary(self, user_id: str, session_id: str, summary: str) -> None:
+    def save_summary(self, user_id: str, session_id: str, summary: str, last_summarized_id: int) -> None:
         pass
 
     @abstractmethod
     def get_last_session_id(self, user_id: str) -> str | None:
+        pass
+
+    @abstractmethod
+    def get_all_sessions(self, user_id: str) -> list[tuple[str, str, str]]:
+        pass
+
+    @abstractmethod
+    def get_max_interaction_id(self, user_id: str, session_id: str) -> int:
         pass

@@ -49,25 +49,25 @@ class MemorySummarizer:
             )
 
             if existing_summaries:
-                latest_summary_text, latest_timestamp = existing_summaries[0]
-                interactions = self.memory.get_interactions_after_timestamp(
-                    user_id=user_id, session_id=session_id, timestamp=latest_timestamp
+                latest_summary_text, last_summarized_id = existing_summaries[0]
+                interactions = self.memory.get_interactions_after_id(
+                    user_id=user_id, session_id=session_id, last_id=last_summarized_id
                 )
             else:
                 latest_summary_text = None
+                last_summarized_id = 0
                 interactions = self.memory.get_recent_interactions(
                     user_id=user_id, session_id=session_id, limit=15
                 )
 
             if not interactions:
-                logger.info("No new updates found to append to current summary.")
+                logger.info("No new interactions found to summarize.")
                 return
 
             conversation = "\n".join(
                 f"User: {q}\nAssistant: {a}" for q, a in interactions
             )
 
-            # ✅ F6 fix — specific methods, no prompt building here
             summary = (
                 self.agent.summarize_update(latest_summary_text, conversation)
                 if latest_summary_text
@@ -75,10 +75,15 @@ class MemorySummarizer:
             )
 
             if summary and summary.strip():
-                self.memory.save_summary(
-                    user_id=user_id, session_id=session_id, summary=summary.strip()
+                new_last_id = self.memory.get_max_interaction_id(
+                    user_id=user_id, session_id=session_id
                 )
-                logger.info("New consolidated summary state written successfully.")
+                self.memory.save_summary(
+                    user_id=user_id, session_id=session_id,
+                    summary=summary.strip(),
+                    last_summarized_id=new_last_id
+                )
+                logger.info("New consolidated summary saved successfully.")
 
         except (MemoryError, SummarizationError):
             logger.exception("Known failure in summarizer engine.")

@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from utils.logger import logger
 from exceptions.custom_errors import MemoryError
 
+
 class MemoryRepository:
 
     def __init__(self, db_path: str):
@@ -12,10 +13,6 @@ class MemoryRepository:
 
     @contextmanager
     def _get_connection(self):
-        """
-        Custom context manager that handles proper connection cleanup 
-        AND native SQLite transaction rollback/commit lifecycles.
-        """
         conn = sqlite3.connect(self.db_path, check_same_thread=False)
         try:
             yield conn
@@ -46,14 +43,19 @@ class MemoryRepository:
                         user_id TEXT NOT NULL,
                         session_id TEXT NOT NULL,
                         summary TEXT NOT NULL,
+                        last_summarized_id INTEGER NOT NULL DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE(user_id, session_id)
                     )
                 """)
+                # Restructured: each session gets its own row
+                # user_id is no longer PRIMARY KEY — one user can have many sessions
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS user_sessions(
-                        user_id TEXT PRIMARY KEY,
-                        last_session_id TEXT NOT NULL,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        session_id TEXT NOT NULL UNIQUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
@@ -62,30 +64,46 @@ class MemoryRepository:
             raise MemoryError(f"Failed to initialize memory DB: {e}") from e
 
     def create_or_update_session(self, user_id: str, session_id: str) -> None:
+        # Insert new session row; if session_id already exists just update updated_at
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO user_sessions(user_id, last_session_id, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id) DO UPDATE SET
-                    last_session_id = excluded.last_session_id,
+                INSERT INTO user_sessions(user_id, session_id, created_at, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(session_id) DO UPDATE SET
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (user_id, session_id)
             )
 
     def get_last_session_id(self, user_id: str) -> str | None:
+        # Most recently used session = highest updated_at
         with self._lock, self._get_connection() as conn:
             row = conn.execute(
                 """
-                SELECT last_session_id
+                SELECT session_id
                 FROM user_sessions
                 WHERE user_id = ?
+                ORDER BY updated_at DESC
                 LIMIT 1
                 """,
                 (user_id,)
             ).fetchone()
         return row[0] if row else None
+
+    def get_all_sessions(self, user_id: str) -> list[tuple[str, str, str]]:
+        # Returns (session_id, created_at, updated_at) ordered by most recent first
+        with self._lock, self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT session_id, created_at, updated_at
+                FROM user_sessions
+                WHERE user_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (user_id,)
+            ).fetchall()
+        return rows
 
     def save_interaction(
         self,
@@ -125,22 +143,29 @@ class MemoryRepository:
             ).fetchall()
         return rows
 
-    def get_interactions_after_timestamp(
-        self,
-        user_id: str,
-        session_id: str,
-        timestamp: str
-    ) -> list[tuple[str, str]]:
+    def get_interactions_after_id(self, user_id: str, session_id: str, last_id: int) -> list[tuple[str, str]]:
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(
                 """
                 SELECT query, answer FROM interactions
-                WHERE user_id = ? AND session_id = ? AND created_at >=? AND importance_score > 0
+                WHERE user_id = ? AND session_id = ?
+                AND id > ? AND importance_score > 0
                 ORDER BY id ASC
                 """,
-                (user_id, session_id, timestamp)
+                (user_id, session_id, last_id)
             ).fetchall()
         return rows
+
+    def get_max_interaction_id(self, user_id: str, session_id: str) -> int:
+        with self._lock, self._get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT MAX(id) FROM interactions
+                WHERE user_id = ? AND session_id = ? AND importance_score > 0
+                """,
+                (user_id, session_id)
+            ).fetchone()
+        return row[0] if row and row[0] is not None else 0
 
     def get_relevant_interactions(
         self,
@@ -182,29 +207,25 @@ class MemoryRepository:
             ).fetchall()
         return rows
 
-    def save_summary(
-        self,
-        user_id: str,
-        session_id: str,
-        summary: str,
-    ) -> None:
+    def save_summary(self, user_id: str, session_id: str, summary: str, last_summarized_id: int) -> None:
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO memory_summaries(user_id, session_id, summary, created_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO memory_summaries(user_id, session_id, summary, last_summarized_id, created_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(user_id, session_id) DO UPDATE SET
                     summary = excluded.summary,
+                    last_summarized_id = excluded.last_summarized_id,
                     created_at = CURRENT_TIMESTAMP
                 """,
-                (user_id, session_id, summary)
+                (user_id, session_id, summary, last_summarized_id)
             )
 
-    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str]]:
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, int]]:
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT summary, created_at
+                SELECT summary, last_summarized_id
                 FROM memory_summaries
                 WHERE user_id = ? AND session_id = ?
                 ORDER BY id DESC

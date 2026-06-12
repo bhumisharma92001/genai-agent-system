@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from openai import OpenAI
 from llm.llm_config import LLMConfig
 from llm.base_llm import BaseLLM
