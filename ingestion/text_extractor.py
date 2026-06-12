@@ -14,7 +14,6 @@ class TextExtractor:
     def extract(self,file_path: str) -> str:
         if not file_path:
             raise InvalidInputError("file_path cannot be empty")
-
         path = Path(file_path)
         if not path.exists():
             raise InvalidInputError(f"File not found: {file_path}")

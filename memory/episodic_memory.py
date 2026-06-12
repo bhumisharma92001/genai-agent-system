@@ -5,7 +5,9 @@ from embeddings.base import BaseEmbedding
 from vector_db.base_vector_db import BaseVectorDB
 from utils.logger import logger
 
+
 class EpisodicMemory(BaseMemory):
+
     def __init__(self, db_path: str, embedding_model: BaseEmbedding, vector_db: BaseVectorDB):
         self.repository = MemoryRepository(db_path=db_path)
         self.repository.initialize()
@@ -16,19 +18,11 @@ class EpisodicMemory(BaseMemory):
         self.repository.create_or_update_session(user_id=user_id, session_id=session_id)
 
     def save_interaction(
-        self,
-        user_id: str,
-        session_id: str,
-        query: str,
-        answer: str,
-        importance_score: int = 1
-    )-> None:
+        self, user_id: str, session_id: str, query: str, answer: str, importance_score: int = 1
+    ) -> None:
         self.repository.save_interaction(
-            user_id=user_id,
-            session_id=session_id,
-            query=query,
-            answer=answer,
-            importance_score=importance_score
+            user_id=user_id, session_id=session_id,
+            query=query, answer=answer, importance_score=importance_score
         )
         try:
             self._vector_db.upsert(
@@ -45,14 +39,12 @@ class EpisodicMemory(BaseMemory):
             user_id=user_id, session_id=session_id, limit=limit
         )
 
-    def get_interactions_after_timestamp(
-        self, user_id: str, session_id: str, timestamp: str
-    ) -> list[tuple[str, str]]:
-        return self.repository.get_interactions_after_timestamp(
-            user_id=user_id, session_id=session_id, timestamp=timestamp
+    def get_interactions_after_id(self, user_id: str, session_id: str, last_id: int) -> list[tuple[str, str]]:
+        return self.repository.get_interactions_after_id(
+            user_id=user_id, session_id=session_id, last_id=last_id
         )
 
-    def get_relevant_interactions(self, user_id: str, session_id: str, query: str, limit: int = 5):
+    def get_relevant_interactions(self, user_id: str, session_id: str, query: str, limit: int = 5) -> list[tuple[str, str]]:
         try:
             results = self._vector_db.query(
                 embedding=self._embedding_model.embed(query, is_query=True),
@@ -75,11 +67,22 @@ class EpisodicMemory(BaseMemory):
             user_id=user_id, session_id=session_id, query=query, limit=limit
         )
 
-    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, str]]:
+    def get_summaries(self, user_id: str, session_id: str) -> list[tuple[str, int]]:
         return self.repository.get_summaries(user_id=user_id, session_id=session_id)
 
-    def save_summary(self, user_id: str, session_id: str, summary: str) -> None:
-        self.repository.save_summary(user_id=user_id, session_id=session_id, summary=summary)
+    def save_summary(self, user_id: str, session_id: str, summary: str, last_summarized_id: int) -> None:
+        self.repository.save_summary(
+            user_id=user_id, session_id=session_id,
+            summary=summary, last_summarized_id=last_summarized_id
+        )
 
     def get_last_session_id(self, user_id: str) -> str | None:
         return self.repository.get_last_session_id(user_id=user_id)
+
+    def get_all_sessions(self, user_id: str) -> list[tuple[str, str, str]]:
+        return self.repository.get_all_sessions(user_id=user_id)
+
+    def get_max_interaction_id(self, user_id: str, session_id: str) -> int:
+        return self.repository.get_max_interaction_id(
+            user_id=user_id, session_id=session_id
+        )

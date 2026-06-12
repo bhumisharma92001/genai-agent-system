@@ -57,3 +57,6 @@ class ToolExecutionError(GenAIError):
 
 class OrchestrationError(GenAIError):
     pass
+
+class SessionError(GenAIError):
+    pass

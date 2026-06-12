@@ -67,12 +67,24 @@ def _extract_math_expression(query: str, llm: BaseLLM) -> str:
 def calculator(query: str, llm: BaseLLM) -> str:
     """Evaluate arithmetic expressions from natural language."""
     try:
-        expr = _extract_math_expression(query, llm)
-
+        # Step 1 — pehle seedha try karo without LLM
+        expr = query.strip().split("=")[0].strip()
         for pattern, symbol in _REPLACEMENTS:
             expr = re.sub(pattern, symbol, expr)
+        clean = "".join(re.findall(r"[\d+\-*/().\s]+", expr))
 
+        if clean.strip():
+            try:
+                result = _safe_eval(clean)
+                return str(round(float(result), 6)).rstrip("0").rstrip(".")
+            except ToolExecutionError:
+                pass  # Direct eval failed — LLM try karo
+
+        # Step 2 — sirf tab LLM use karo jab direct eval fail ho
+        expr = _extract_math_expression(query, llm)
         expr = expr.split("=")[0].strip()
+        for pattern, symbol in _REPLACEMENTS:
+            expr = re.sub(pattern, symbol, expr)
         clean = "".join(re.findall(r"[\d+\-*/().\s]+", expr))
         if not clean.strip():
             return "Calculation error: No valid expression found in query."

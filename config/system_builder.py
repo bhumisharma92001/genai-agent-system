@@ -21,6 +21,7 @@ from tools.tool_registry import ToolRegistry
 from orchestrator import AgentOrchestrator
 from vector_db.chroma_db import ChromaDB
 from exceptions.custom_errors import ConfigurationError
+from agents.react_agent import ReActAgent
 from utils.logger import logger
 
 
@@ -120,12 +121,14 @@ def build_system() -> tuple:
     registry.register("calculator", calculator)
 
     tool_agent = ToolAgent(registry=registry, llm=llm)
+    react_agent = ReActAgent(llm=llm,tool_agent=tool_agent,retriever=retriever,)
 
     orchestrator = AgentOrchestrator(
         retriever=retriever,
         memory_manager=memory_manager,
         reasoning_agent=ReasoningAgent(llm=llm),
         tool_agent=tool_agent,
+        react_agent=react_agent,
         llm=llm,
         llm_config=build_llm_config(),
     )
