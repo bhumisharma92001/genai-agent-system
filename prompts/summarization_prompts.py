@@ -27,10 +27,3 @@ def get_update_prompt(existing_summary: str, new_conversation: str) -> str:
     )
 
 
-def get_summarization_prompt(context: str) -> str:
-    """Generic summarization — used by SummarizationAgent.summarize()"""
-    return (
-        "Summarize the following content clearly and concisely.\n"
-        "Preserve all key facts, numbers, names, and relationships.\n\n"
-        f"CONTENT:\n{context}"
-    )

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from ingestion.text_extractor import TextExtractor
 from ingestion.table_extractor import TableExtractor
@@ -50,17 +51,16 @@ class DocumentLoader:
         file_extension = path.suffix.lower()
         is_spreadsheet = file_extension in (".csv", ".xlsx", ".xls")
 
-        # ── Text chunks (non-spreadsheet only) ──────────────────────────────
         if not is_spreadsheet:
             logger.info("Extracting raw text for non-spreadsheet file")
             try:
                 text = self.text_extractor.extract(file_path)
                 if text.strip():
-                    for chunk_text in self.chunker.split_text(text=text):
+                    for i, chunk_text in enumerate(self.chunker.split_text(text=text)):
                         chunks.append(
                             self.chunk_factory.create_text_chunk(
                                 text=chunk_text,
-                                metadata=base_metadata,
+                                metadata={**base_metadata, "chunk_index": i},
                             )
                         )
             except InvalidInputError:
@@ -73,7 +73,6 @@ class DocumentLoader:
                 f"Skipping text extraction for structured spreadsheet: {file_extension}"
             )
 
-        # ── Table chunks ─────────────────────────────────────────────────────
         logger.info("Extracting tables/structured data")
         try:
             extracted_tables = self.table_extractor.extract(file_path)
@@ -81,22 +80,17 @@ class DocumentLoader:
             for table in extracted_tables:
                 dataframe = table["dataframe"]
 
-                # FIX: pull table_title and column_headers from extractor output
-                # Previously these were never passed → chunk_factory enrichment was skipped
                 table_title = table.get("table_title", "")
                 column_headers = table.get("column_headers", list(dataframe.columns))
                 page = table.get("page", 1)
 
-                # Table-level metadata (shared by summary chunk + all row chunks)
                 table_metadata = {
                     **base_metadata,
                     "page": page,
                     "table_title": table_title,
-                    "column_headers": column_headers,
+                    "column_headers": json.dumps(column_headers),
                 }
 
-                # 1. Full-table summary chunk — for "summarize the table" queries
-                # FIX: pass table_title to summarizer so summary includes the title
                 summary = self.table_summarizer.summarize(
                     dataframe=dataframe,
                     table_title=table_title,
@@ -104,13 +98,10 @@ class DocumentLoader:
                 chunks.append(
                     self.chunk_factory.create_table_chunk(
                         summary=summary,
-                        metadata=table_metadata,
+                        metadata={**table_metadata, "chunk_index": len(chunks)},
                     )
                 )
 
-                # 2. Per-row chunks — for analytics/lookup queries
-                # FIX: pass table_title to summarize_row + pass full table_metadata
-                # so chunk_factory can prepend headers to every row chunk
                 for row_index, row in dataframe.iterrows():
                     row_text = self.table_summarizer.summarize_row(
                         row=row,
@@ -121,6 +112,7 @@ class DocumentLoader:
                             text=row_text,
                             metadata={
                                 **table_metadata,
+                                "chunk_index": len(chunks),
                                 "row_index": int(row_index),
                             },
                         )
@@ -134,3 +126,4 @@ class DocumentLoader:
 
         logger.info(f"Created {len(chunks)} chunks")
         return chunks
+    

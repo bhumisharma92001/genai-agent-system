@@ -1,8 +1,8 @@
 import threading
 from utils.logger import logger
 from memory.base_memory import BaseMemory
-from prompts.summarization_prompts import get_update_prompt, get_fresh_prompt
 from exceptions.custom_errors import MemoryError, SummarizationError
+
 
 class MemorySummarizer:
 
@@ -67,13 +67,12 @@ class MemorySummarizer:
                 f"User: {q}\nAssistant: {a}" for q, a in interactions
             )
 
-            prompt_context = (
-                get_update_prompt(latest_summary_text, conversation)
+            # ✅ F6 fix — specific methods, no prompt building here
+            summary = (
+                self.agent.summarize_update(latest_summary_text, conversation)
                 if latest_summary_text
-                else get_fresh_prompt(conversation)
+                else self.agent.summarize_fresh(conversation)
             )
-
-            summary = self.agent.summarize(prompt_context)
 
             if summary and summary.strip():
                 self.memory.save_summary(

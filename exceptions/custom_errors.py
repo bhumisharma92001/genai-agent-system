@@ -57,6 +57,3 @@ class ToolExecutionError(GenAIError):
 
 class OrchestrationError(GenAIError):
     pass
-
-class SwarmError(GenAIError):
-    pass

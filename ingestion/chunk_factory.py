@@ -13,6 +13,7 @@ class ChunkFactory:
                 f"{metadata.get('session_id', '')}:"
                 f"{metadata.get('document_id', '')}:"
                 f"{metadata.get('source', '')}:"
+                f"{metadata.get('chunk_index', '')}:"
                 f"{text[:200]}"
             )
             return {
@@ -27,10 +28,6 @@ class ChunkFactory:
             raise ChunkingError(f"Failed to create text chunk: {e}") from e
 
     def create_table_chunk(self, summary: str, metadata: dict) -> dict:
-        """
-        Stores the full table summary as one searchable chunk.
-        Used for 'summarize the table' type queries.
-        """
         if not summary or not summary.strip():
             raise InvalidInputError("Table summary cannot be empty")
         try:
@@ -39,6 +36,7 @@ class ChunkFactory:
                 f"{metadata.get('session_id', '')}:"
                 f"{metadata.get('document_id', '')}:"
                 f"{metadata.get('source', '')}:"
+                f"{metadata.get('chunk_index', '')}:"
                 f"{summary[:200]}"
             )
             return {
@@ -53,20 +51,9 @@ class ChunkFactory:
             raise ChunkingError(f"Failed to create table chunk: {e}") from e
 
     def create_table_row_chunk(self, text: str, metadata: dict) -> dict:
-        """
-        Stores individual table rows WITH column headers prepended.
-        This is critical for analytics queries (average, sum, max, etc.)
-        because each row is independently retrievable with full context.
-
-        Expected metadata keys (added by table_extractor):
-            - table_title   : name/heading of the table  (optional)
-            - column_headers: list of column names        (optional)
-        """
         if not text or not text.strip():
             raise InvalidInputError("Table row text cannot be empty")
         try:
-            # Enrich row text with table title + headers so every row chunk
-            # is self-contained and semantically searchable.
             table_title = metadata.get("table_title", "")
             headers = metadata.get("column_headers", [])
 
@@ -84,6 +71,7 @@ class ChunkFactory:
                 f"{metadata.get('session_id', '')}:"
                 f"{metadata.get('document_id', '')}:"
                 f"{metadata.get('source', '')}:"
+                f"{metadata.get('chunk_index', '')}:"
                 f"{enriched_text[:200]}"
             )
             return {

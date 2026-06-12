@@ -1,4 +1,3 @@
-from typing import Iterator
 from utils.logger import logger
 from llm.base_llm import BaseLLM
 from llm.llm_config import LLMConfig
@@ -32,14 +31,19 @@ class ReasoningAgent:
     def _build_history(self, history: list[tuple]) -> str:
         """
         Build conversation history string.
-        Each tuple is (query, answer). Labelled clearly for pronoun resolution.
+        Summary tuple alag block mein render hoti hai.
+        Regular interactions User/Assistant format mein.
         """
         if not history:
             return ""
         lines = []
         for q, a in history:
-            lines.append(f"User: {q}")
-            lines.append(f"Assistant: {a}")
+            if q == "Previous conversation summary":
+                lines.append(f"[CONVERSATION SUMMARY]\n{a}")
+                lines.append("")
+            else:
+                lines.append(f"User: {q}")
+                lines.append(f"Assistant: {a}")
         return "\n".join(lines)
 
     def _messages(self, query: str, chunks: list[dict], history: list[tuple]) -> list[dict]:
@@ -66,19 +70,19 @@ class ReasoningAgent:
             logger.error(f"ReasoningAgent failed: {e}")
             raise ReasoningGenerationError(f"Generation failed: {e}") from e
 
-    def stream_answer(
-        self, query: str, chunks: list[dict], history: list[tuple], config: LLMConfig
-    ) -> Iterator[str]:
-        if not query or not query.strip():
-            raise InvalidQueryError("Query cannot be empty.")
-        if not chunks:
-            yield "I could not find the answer in the provided documents."
-            return
+    def observe(self, query: str, tool_result: str, config: LLMConfig) -> str:
+        """Tool result ko LLM se natural language mein explain karwao."""
+        if not tool_result or not tool_result.strip():
+            return "I could not compute the result."
         try:
-            for token in self.llm.stream(
-                messages=self._messages(query, chunks, history), config=config
-            ):
-                yield token
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant. Explain the result of a calculation clearly and naturally."},
+                {"role": "user", "content": f"Question: {query}\nCalculation Result: {tool_result}\nExplain this result in a natural, helpful way."}
+            ]
+            resp = self.llm.generate(messages=messages, config=config)
+            if not resp:
+                return tool_result
+            return resp.strip()
         except Exception as e:
-            logger.error(f"ReasoningAgent stream failed: {e}")
-            raise ReasoningGenerationError(f"Streaming failed: {e}") from e
+            logger.error(f"ReasoningAgent observe failed: {e}")
+            return tool_result

@@ -32,14 +32,3 @@ class OpenRouterLLM(BaseLLM):
         except Exception as e:
             logger.error(f"LLM generate failed: {e}")
             raise LLMGenerationError(f"LLM generation failed: {e}") from e
-
-    def stream(self, messages: list[dict], config: LLMConfig) -> Iterator[str]:
-        try:
-            resp = self.client.chat.completions.create(**self._base_params(messages, config), stream=True)
-            for chunk in resp:
-                token = chunk.choices[0].delta.content
-                if token:
-                    yield token
-        except Exception as e:
-            logger.error(f"LLM stream failed: {e}")
-            raise LLMGenerationError(f"LLM streaming failed: {e}") from e

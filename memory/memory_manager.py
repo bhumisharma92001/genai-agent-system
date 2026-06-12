@@ -1,4 +1,3 @@
-import threading
 from utils.logger import logger
 from memory.base_memory import BaseMemory
 from memory.interaction_filter import InteractionFilter

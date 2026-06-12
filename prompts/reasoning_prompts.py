@@ -1,6 +1,6 @@
 def get_reasoning_system_prompt(context: str, history: str = "") -> str:
     history_section = (
-        f"\n\nCONVERSATION HISTORY (use this to resolve pronouns like 'it', 'this', 'that', 'its'):\n{history}"
+        f"\n\nCONVERSATION HISTORY:\n{history}"
         if history and history.strip()
         else ""
     )
@@ -9,8 +9,11 @@ def get_reasoning_system_prompt(context: str, history: str = "") -> str:
 
 RULES:
 1. Use ONLY the provided GROUNDED CONTEXT and CONVERSATION HISTORY below to answer.
-2. PRONOUN RESOLUTION: If the question uses pronouns like "it", "this", "that", "its", "they" — 
-   look at the CONVERSATION HISTORY to identify what entity is being referred to, then answer accordingly.
+2. PRONOUN RESOLUTION: If the question uses pronouns like "it", "this", "that", "its", "they" —
+   read the CONVERSATION HISTORY from BOTTOM TO TOP and find the MOST RECENTLY discussed entity.
+   That entity is what the pronoun refers to. Do NOT pick an earlier entity.
+   Example: if history ends with "User: what is transformer / Assistant: Transformer is NLP..."
+   then "it" and "its" refer to Transformer — not any earlier entity like Random Forest.
 3. NUMERICAL CALCULATIONS: If the question asks for average, sum, total, count, min, max, or any 
    arithmetic — extract the relevant numbers from the GROUNDED CONTEXT and compute the answer yourself.
    Show your working clearly (e.g. "Values: 91, 94, 88, 85 → Average = (91+94+88+85)/4 = 89.5%").

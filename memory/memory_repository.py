@@ -152,7 +152,7 @@ class MemoryRepository:
         keywords = [f"%{word}%" for word in query.lower().split() if len(word) > 3]
         with self._lock, self._get_connection() as conn:
             if keywords:
-                like_clauses = " OR ".join(["LOWER(query) LIKE ?" for _ in keywords])
+                like_clauses = " OR ".join(["LOWER(query) LIKE ? OR LOWER(answer) LIKE ?" for _ in keywords])
                 sql = f"""
                     SELECT query, answer FROM (
                         SELECT id, query, answer
@@ -163,7 +163,8 @@ class MemoryRepository:
                         LIMIT ?
                     ) ORDER BY id ASC
                 """
-                rows = conn.execute(sql, (user_id, session_id, *keywords, limit)).fetchall()
+                doubled_keywords = [kw for kw in keywords for _ in range(2)]
+                rows = conn.execute(sql, (user_id, session_id, *doubled_keywords, limit)).fetchall()
                 if rows:
                     return rows
 

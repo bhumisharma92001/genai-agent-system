@@ -6,7 +6,3 @@ class BaseLLM(ABC):
     @abstractmethod
     def generate(self, messages: list[dict], config: LLMConfig) -> str:
         pass
-
-    @abstractmethod
-    def stream(self, messages: list[dict], config: LLMConfig) -> Iterator[str]:
-        pass

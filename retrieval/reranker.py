@@ -3,9 +3,7 @@ from sentence_transformers import CrossEncoder
 from utils.logger import logger
 from exceptions.custom_errors import RerankError, InvalidInputError, ModelLoadError
 
-
 class Reranker:
-
     def __init__(self, model_name: str):
         if not model_name or not model_name.strip():
             raise InvalidInputError("model_name cannot be empty")
@@ -21,7 +19,7 @@ class Reranker:
         query: str,
         chunks: list[dict],
         top_k: int = 3,
-        score_threshold: float | None = None,
+        score_threshold: float | None = None
     ) -> list[dict]:
         if not query or not query.strip():
             raise InvalidInputError("query cannot be empty")
@@ -36,9 +34,7 @@ class Reranker:
                 for chunk in chunks
             ]
             scores = self.model.predict(pairs)
-
-            # Numpy scalar + array normalization
-            if hasattr(scores, "tolist"):
+            if hasattr(scores, 'tolist'):
                 scores = scores.tolist()
             elif isinstance(scores, (float, int, np.float32, np.float64)):
                 scores = [float(scores)]
@@ -52,18 +48,13 @@ class Reranker:
             for chunk, score in scored_chunks:
                 if len(reranked_chunks) >= top_k:
                     break
-                # FIX: was `break` — caused valid high-score chunks to be skipped
-                # if any single chunk fell below threshold during iteration.
-                # `continue` correctly skips only that chunk and checks the rest.
                 if score_threshold is not None and float(score) < score_threshold:
-                    continue
-                cloned_chunk = chunk.copy()
+                    continue  
+                cloned_chunk = chunk.copy() 
                 cloned_chunk["rerank_score"] = float(score)
                 reranked_chunks.append(cloned_chunk)
 
-            logger.info(
-                f"Reranking complete. Passed {len(reranked_chunks)}/{len(chunks)} chunks."
-            )
+            logger.info(f"Reranking complete. Passed {len(reranked_chunks)}/{len(chunks)} chunks.")
             return reranked_chunks
 
         except InvalidInputError:

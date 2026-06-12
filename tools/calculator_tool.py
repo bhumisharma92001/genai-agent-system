@@ -1,6 +1,8 @@
 import ast
 import operator
 import re
+from llm.base_llm import BaseLLM
+from llm.llm_config import LLMConfig
 from exceptions.custom_errors import ToolExecutionError
 
 _OPS = {
@@ -10,6 +12,18 @@ _OPS = {
     ast.Div: operator.truediv,
     ast.USub: operator.neg,
 }
+
+_REPLACEMENTS = [
+    (r'\bmultiplied\s+by\b', '*'),
+    (r'\bdivided\s+by\b', '/'),
+    (r'\bplus\b', '+'),
+    (r'\bminus\b', '-'),
+    (r'\btimes\b', '*'),
+    (r'\badd\b', '+'),
+    (r'\band\b', '+'),
+]
+
+_MATH_EXTRACT_CONFIG = LLMConfig(temperature=0, top_p=1.0, max_tokens=20)
 
 
 def _safe_eval(expr: str) -> float:
@@ -32,28 +46,39 @@ def _safe_eval(expr: str) -> float:
         raise ToolExecutionError(f"Invalid expression: {e}") from e
 
 
-def calculator(query: str) -> str:
+def _extract_math_expression(query: str, llm: BaseLLM) -> str:
+    """LLM se clean math expression nikalo natural language se."""
+    resp = llm.generate(
+        messages=[{"role": "user", "content":
+            f"Extract only the arithmetic expression from this query as digits and operators only.\n"
+            f"Examples:\n"
+            f"'what is ninety thousand and twenty five' → '90000 + 25'\n"
+            f"'what is 10 percent of 500' → '500 * 0.10'\n"
+            f"'sum of 100 and 200' → '100 + 200'\n"
+            f"'2 + 2' → '2 + 2'\n"
+            f"Query: {query}\n"
+            f"Reply with ONLY the math expression, nothing else."
+        }],
+        config=_MATH_EXTRACT_CONFIG,
+    )
+    return resp.strip()
+
+
+def calculator(query: str, llm: BaseLLM) -> str:
     """Evaluate arithmetic expressions from natural language."""
     try:
-        q = query.lower()
-        for word, sym in [
-            ("plus", "+"),
-            ("minus", "-"),
-            ("multiplied by", "*"),
-            ("times", "*"),
-            ("divided by", "/"),
-            ("add", "+"),
-            ("and", "+"),
-        ]:
-            q = q.replace(word, sym)
+        expr = _extract_math_expression(query, llm)
 
-        expr = "".join(re.findall(r"[\d+\-*/().\s]+", q))
-        if not expr.strip():
+        for pattern, symbol in _REPLACEMENTS:
+            expr = re.sub(pattern, symbol, expr)
+
+        expr = expr.split("=")[0].strip()
+        clean = "".join(re.findall(r"[\d+\-*/().\s]+", expr))
+        if not clean.strip():
             return "Calculation error: No valid expression found in query."
 
-        result = _safe_eval(expr)
-        formatted = str(round(float(result), 6)).rstrip("0").rstrip(".")
-        return formatted
+        result = _safe_eval(clean)
+        return str(round(float(result), 6)).rstrip("0").rstrip(".")
 
     except ToolExecutionError as e:
         return f"Calculation error: {e}"
