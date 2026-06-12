@@ -9,4 +9,6 @@ memory/*.db
 vector_store/
 .idea/
 app.log
-.vscode/
+.vscode/memory.db
+memory_store/
+vector_store/

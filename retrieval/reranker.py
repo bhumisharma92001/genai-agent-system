@@ -34,8 +34,6 @@ class Reranker:
                 for chunk in chunks
             ]
             scores = self.model.predict(pairs)
-
-            # ✅ Numpy scalar + array normalization
             if hasattr(scores, 'tolist'):
                 scores = scores.tolist()
             elif isinstance(scores, (float, int, np.float32, np.float64)):
@@ -51,8 +49,8 @@ class Reranker:
                 if len(reranked_chunks) >= top_k:
                     break
                 if score_threshold is not None and float(score) < score_threshold:
-                    break  # ✅ Sorted hai — aage aur bure honge
-                cloned_chunk = chunk.copy()  # ✅ Mutation leak rokta hai
+                    continue  
+                cloned_chunk = chunk.copy() 
                 cloned_chunk["rerank_score"] = float(score)
                 reranked_chunks.append(cloned_chunk)
 

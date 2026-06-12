@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 class BaseEmbedding(ABC):
 
     @abstractmethod
-    def embed(self, text, is_query: bool = False)-> list[float]:
+    def embed(self, text: str, is_query: bool = False)-> list[float]:
         pass
     
     @abstractmethod
