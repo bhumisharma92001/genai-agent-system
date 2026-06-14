@@ -24,9 +24,11 @@ class EpisodicMemory(BaseMemory):
             user_id=user_id, session_id=session_id,
             query=query, answer=answer, importance_score=importance_score
         )
+        if importance_score == 0:
+            return
         try:
             self._vector_db.upsert(
-                ids=[f"{user_id}:{session_id}:{hashlib.md5(query.encode()).hexdigest()}"],
+                ids=[f"{user_id}:{session_id}:{hashlib.sha256(query.encode()).hexdigest()}"],
                 embeddings=[self._embedding_model.embed(query, is_query=False)],
                 documents=[f"Q: {query}\nA: {answer}"],
                 metadatas=[{"user_id": user_id, "session_id": session_id, "importance_score": importance_score}]

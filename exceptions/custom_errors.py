@@ -40,7 +40,7 @@ class ExtractionError(GenAIError):
 class UnsupportedFormatError(GenAIError):
     pass
 
-class MemoryError(GenAIError):
+class EpisodicMemoryError(GenAIError):
     pass
 
 class RerankError(GenAIError):

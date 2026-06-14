@@ -1,7 +1,6 @@
 import os
 from agents.reasoning_agent import ReasoningAgent
 from agents.summarization_agent import SummarizationAgent
-from agents.tool_agent import ToolAgent
 from embeddings.sentence_transformer_embedding import SentenceTransformerEmbedding
 from indexing.indexing_pipeline import IndexingPipeline
 from ingestion.chunker import TextChunker
@@ -23,7 +22,7 @@ from vector_db.chroma_db import ChromaDB
 from exceptions.custom_errors import ConfigurationError
 from agents.react_agent import ReActAgent
 from utils.logger import logger
-
+from functools import partial
 
 def build_loader() -> DocumentLoader:
     return DocumentLoader(
@@ -118,17 +117,15 @@ def build_system() -> tuple:
     )
 
     registry = ToolRegistry()
-    registry.register("calculator", calculator)
-
-    tool_agent = ToolAgent(registry=registry, llm=llm)
-    react_agent = ReActAgent(llm=llm,tool_agent=tool_agent,retriever=retriever,)
+    registry.register("calculator", partial(calculator, llm=llm))
+    react_agent = ReActAgent(llm=llm,retriever=retriever, registry=registry)
 
     orchestrator = AgentOrchestrator(
         retriever=retriever,
         memory_manager=memory_manager,
         reasoning_agent=ReasoningAgent(llm=llm),
-        tool_agent=tool_agent,
         react_agent=react_agent,
+        registry=registry,
         llm=llm,
         llm_config=build_llm_config(),
     )

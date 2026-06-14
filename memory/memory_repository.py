@@ -2,7 +2,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from utils.logger import logger
-from exceptions.custom_errors import MemoryError
+from exceptions.custom_errors import EpisodicMemoryError
 
 
 class MemoryRepository:
@@ -48,8 +48,6 @@ class MemoryRepository:
                         UNIQUE(user_id, session_id)
                     )
                 """)
-                # Restructured: each session gets its own row
-                # user_id is no longer PRIMARY KEY — one user can have many sessions
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS user_sessions(
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,10 +59,9 @@ class MemoryRepository:
                 """)
         except Exception as e:
             logger.error(f"DB initialization failed: {str(e)}")
-            raise MemoryError(f"Failed to initialize memory DB: {e}") from e
+            raise EpisodicMemoryError(f"Failed to initialize memory DB: {e}") from e
 
     def create_or_update_session(self, user_id: str, session_id: str) -> None:
-        # Insert new session row; if session_id already exists just update updated_at
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
@@ -77,7 +74,6 @@ class MemoryRepository:
             )
 
     def get_last_session_id(self, user_id: str) -> str | None:
-        # Most recently used session = highest updated_at
         with self._lock, self._get_connection() as conn:
             row = conn.execute(
                 """
@@ -92,7 +88,6 @@ class MemoryRepository:
         return row[0] if row else None
 
     def get_all_sessions(self, user_id: str) -> list[tuple[str, str, str]]:
-        # Returns (session_id, created_at, updated_at) ordered by most recent first
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(
                 """

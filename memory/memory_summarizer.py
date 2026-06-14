@@ -1,7 +1,7 @@
 import threading
 from utils.logger import logger
 from memory.base_memory import BaseMemory
-from exceptions.custom_errors import MemoryError, SummarizationError
+from exceptions.custom_errors import EpisodicMemoryError, SummarizationError
 
 
 class MemorySummarizer:
@@ -18,8 +18,10 @@ class MemorySummarizer:
             if self._summary_thread and self._summary_thread.is_alive():
                 logger.info("Joining in-flight background summary thread.")
                 self._summary_thread.join()
+
             with self._lock:
                 if self._is_summarizing:
+                    logger.info("Blocking summarization already running. Skipping.")
                     return
                 self._is_summarizing = True
             try:
@@ -40,7 +42,13 @@ class MemorySummarizer:
             args=(user_id, session_id),
             daemon=True
         )
-        self._summary_thread.start()
+        try:
+            self._summary_thread.start()
+        except Exception as e:
+            with self._lock:
+                self._is_summarizing = False
+            logger.error(f"Failed to start summarization thread: {e}")
+            raise
 
     def _process(self, user_id: str, session_id: str):
         try:
@@ -85,7 +93,7 @@ class MemorySummarizer:
                 )
                 logger.info("New consolidated summary saved successfully.")
 
-        except (MemoryError, SummarizationError):
+        except (EpisodicMemoryError, SummarizationError):
             logger.exception("Known failure in summarizer engine.")
         except Exception:
             logger.exception("Unexpected error in summarizer engine.")

@@ -1,4 +1,6 @@
 from exceptions.custom_errors import ConfigurationError
+
+
 class LLMConfig:
 
     def __init__(
@@ -8,7 +10,7 @@ class LLMConfig:
         max_tokens: int = 512
     ):
         if not 0 <= temperature <= 2.0:
-            raise ConfigurationError("temperature must be between 0 and 1")
+            raise ConfigurationError("temperature must be between 0 and 2.0")
         if not 0 <= top_p <= 1:
             raise ConfigurationError("top_p must be between 0 and 1")
         if max_tokens <= 0:

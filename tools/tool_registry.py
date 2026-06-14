@@ -13,6 +13,3 @@ class ToolRegistry:
         if not tool:
             raise ToolExecutionError(f"Tool '{name}' not found in registry.")
         return tool
-
-    def available(self) -> list[str]:
-        return list(self._tools.keys())

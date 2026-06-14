@@ -53,9 +53,6 @@ def run_repl_loop(pipeline, orchestrator, memory_manager, runtime):
 
         if query.startswith("/ingest"):
             handler.handle_ingest(query, user_id, session_id)
-            interaction_count += 1
-            if interaction_count % 3 == 0:
-                memory_manager.summarize_in_background(user_id=user_id, session_id=session_id, blocking=False)
             continue
 
         if query.startswith("/list"):
@@ -66,11 +63,16 @@ def run_repl_loop(pipeline, orchestrator, memory_manager, runtime):
             handler.handle_delete(query, user_id, session_id)
             continue
 
-        if "summary" in clean_query.split() or clean_query.startswith("summ"):
+        if query.startswith("/summary"):
             handler.handle_summary(user_id, session_id)
             continue
 
-        answer = orchestrator.get_response(query=query, user_id=user_id, session_id=session_id)
+        try:
+            answer = orchestrator.get_response(query=query, user_id=user_id, session_id=session_id)
+        except Exception as e:
+            logger.error(f"Orchestrator error: {e}")
+            print("\nAssistant: I encountered an issue processing your request. Please try again.")
+            continue
 
         if not answer.strip():
             print("\nAssistant: I'm sorry, I encountered an issue. Please try again.")
