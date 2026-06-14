@@ -3,7 +3,9 @@ from sentence_transformers import CrossEncoder
 from utils.logger import logger
 from exceptions.custom_errors import RerankError, InvalidInputError, ModelLoadError
 
+
 class Reranker:
+
     def __init__(self, model_name: str):
         if not model_name or not model_name.strip():
             raise InvalidInputError("model_name cannot be empty")
@@ -22,7 +24,7 @@ class Reranker:
         score_threshold: float | None = None
     ) -> list[dict]:
         if not query or not query.strip():
-            raise InvalidInputError("query cannot be empty")
+            raise InvalidInputError("top_k must be positive")
         if not chunks:
             return []
         if top_k <= 0:
@@ -49,10 +51,12 @@ class Reranker:
                 if len(reranked_chunks) >= top_k:
                     break
                 if score_threshold is not None and float(score) < score_threshold:
-                    continue  
-                cloned_chunk = chunk.copy() 
-                cloned_chunk["rerank_score"] = float(score)
-                reranked_chunks.append(cloned_chunk)
+                    continue
+                reranked_chunks.append({
+                    **chunk,
+                    "metadata": {**chunk["metadata"]} if chunk.get("metadata") else {},
+                    "rerank_score": float(score),
+                })
 
             logger.info(f"Reranking complete. Passed {len(reranked_chunks)}/{len(chunks)} chunks.")
             return reranked_chunks

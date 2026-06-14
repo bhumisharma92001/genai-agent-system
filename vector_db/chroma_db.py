@@ -1,7 +1,7 @@
 import chromadb
 from vector_db.base_vector_db import BaseVectorDB
 from utils.logger import logger
-from exceptions.custom_errors import VectorDBError, InvalidInputError, ModelLoadError
+from exceptions.custom_errors import VectorDBError, InvalidInputError
 
 
 class ChromaDB(BaseVectorDB):
@@ -20,7 +20,7 @@ class ChromaDB(BaseVectorDB):
             logger.info(f"ChromaDB initialized: collection='{collection_name}', path='{persist_path}'")
         except Exception as e:
             logger.error(f"ChromaDB initialization failed: {str(e)}")
-            raise ModelLoadError(f"Failed to initialize ChromaDB: {e}") from e
+            raise VectorDBError(f"Failed to initialize ChromaDB: {e}") from e
 
     def upsert(self, ids: list[str], embeddings: list[list[float]], documents: list[str], metadatas: list[dict]) -> None:
         if not ids:

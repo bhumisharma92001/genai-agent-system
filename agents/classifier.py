@@ -20,7 +20,10 @@ def classify_query(query: str, llm: BaseLLM) -> QueryCategory:
         config=LLMConfig(temperature=0, top_p=1.0, max_tokens=10),
     )
     try:
-        return QueryCategory(resp.strip().upper())
+        category = QueryCategory(resp.strip().upper())
+        if category == QueryCategory.ACTION:
+            logger.warning(f"ACTION query — no handler implemented: '{query}'")
+        return category
     except ValueError:
         logger.warning(f"Unknown category '{resp.strip()}'. Defaulting to INFORMATIONAL.")
         return QueryCategory.INFORMATIONAL

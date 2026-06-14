@@ -4,6 +4,8 @@ from llm.base_llm import BaseLLM
 from llm.llm_config import LLMConfig
 from prompts.react_prompts import get_react_system_prompt
 from exceptions.custom_errors import ReasoningGenerationError
+from utils.conversation import build_history
+from tools.tool_registry import ToolRegistry
 
 MAX_ITERATIONS = 5
 
@@ -13,26 +15,11 @@ _FINAL_RE = re.compile(r"Final\s*Answer\s*:\s*(.+)", re.I | re.S)
 
 
 class ReActAgent:
-    """
-    ReAct loop — Think → Act → Observe → Think → ... → Final Answer
-    Tools: retriever + calculator
-    """
 
-    def __init__(self, llm: BaseLLM, tool_agent, retriever):
+    def __init__(self, llm: BaseLLM, retriever, registry):
         self.llm = llm
-        self.tool_agent = tool_agent
         self.retriever = retriever
-
-    def _build_history(self, history: list[tuple]) -> str:
-        if not history:
-            return ""
-        lines = []
-        for q, a in history:
-            if q == "Previous conversation summary":
-                lines.append(f"[CONVERSATION SUMMARY]\n{a}\n")
-            else:
-                lines.append(f"User: {q}\nAssistant: {a}")
-        return "\n".join(lines)
+        self.registry = registry
 
     def _call_tool(self, tool_name: str, tool_input: str, user_id: str, session_id: str) -> str:
         tool_name = tool_name.strip().lower()
@@ -51,7 +38,7 @@ class ReActAgent:
 
         if tool_name == "calculator":
             try:
-                return self.tool_agent.execute("calculator", tool_input)
+                return self.registry.get("calculator")(tool_input)
             except Exception as e:
                 logger.warning(f"ReAct calculator failed: {e}")
                 return f"Calculator error: {e}"
@@ -61,7 +48,7 @@ class ReActAgent:
     def run(self, query: str, user_id: str, session_id: str, history: list[tuple], config: LLMConfig) -> str:
         messages = [{"role": "system", "content": get_react_system_prompt(max_iter=MAX_ITERATIONS)}]
 
-        history_text = self._build_history(history)
+        history_text = build_history(history)
         if history_text:
             messages.append({"role": "system", "content": f"CONVERSATION HISTORY:\n{history_text}"})
         messages.append({"role": "user", "content": query})

@@ -9,7 +9,7 @@ class SummarizationAgent:
 
     def __init__(self, llm: BaseLLM):
         self.llm = llm
-        self.config = LLMConfig(temperature=0.2, top_p=0.8, max_tokens=256)
+        self.config = LLMConfig(temperature=0.2, top_p=0.8, max_tokens=512)
 
     def _call_llm(self, prompt: str) -> str:
         messages = [
@@ -22,7 +22,6 @@ class SummarizationAgent:
         return response.strip()
 
     def summarize(self, prompt: str) -> str:
-        """Generic — direct prompt pass karo."""
         if not prompt or not prompt.strip():
             return ""
         try:
@@ -34,7 +33,6 @@ class SummarizationAgent:
             raise SummarizationError(f"Summarization failed: {e}") from e
 
     def summarize_fresh(self, conversation: str) -> str:
-        """Pehli baar — fresh summary banao."""
         if not conversation or not conversation.strip():
             return ""
         try:
@@ -46,7 +44,6 @@ class SummarizationAgent:
             raise SummarizationError(f"Fresh summarization failed: {e}") from e
 
     def summarize_update(self, existing_summary: str, new_conversation: str) -> str:
-        """Existing summary update karo."""
         if not new_conversation or not new_conversation.strip():
             return existing_summary
         try:

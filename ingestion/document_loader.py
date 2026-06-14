@@ -33,10 +33,10 @@ class DocumentLoader:
         document_id: str = None,
     ) -> list[dict]:
         if not file_path:
-            raise ValueError("file_path cannot be empty")
+            raise InvalidInputError("file_path cannot be empty")
         path = Path(file_path)
         if not path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+            raise InvalidInputError(f"File not found: {file_path}")
 
         doc_id = document_id or path.name
         base_metadata = {
