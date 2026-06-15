@@ -1,29 +1,26 @@
-import json
 from pathlib import Path
 from ingestion.text_extractor import TextExtractor
 from ingestion.table_extractor import TableExtractor
-from ingestion.chunker import TextChunker
 from ingestion.chunk_factory import ChunkFactory
-from ingestion.table_summarizer import TableSummarizer
 from utils.logger import logger
 from exceptions.custom_errors import DocumentLoadError, InvalidInputError
+from agents.chunking_agent import ChunkingAgent
 
 
 class DocumentLoader:
 
     def __init__(
         self,
-        chunker: TextChunker,
         text_extractor: TextExtractor,
         table_extractor: TableExtractor,
         chunk_factory: ChunkFactory,
-        table_summarizer: TableSummarizer,
+        chunking_agent: ChunkingAgent,
     ):
-        self.chunker = chunker
+
         self.text_extractor = text_extractor
         self.table_extractor = table_extractor
         self.chunk_factory = chunk_factory
-        self.table_summarizer = table_summarizer
+        self.chunking_agent = chunking_agent
 
     def load(
         self,
@@ -56,7 +53,12 @@ class DocumentLoader:
             try:
                 text = self.text_extractor.extract(file_path)
                 if text.strip():
-                    for i, chunk_text in enumerate(self.chunker.split_text(text=text)):
+                    text_chunks = self.chunking_agent.chunk(
+                        text=text,
+                        tables=[],
+                        file_path=file_path
+                    )
+                    for i, chunk_text in enumerate(text_chunks):
                         chunks.append(
                             self.chunk_factory.create_text_chunk(
                                 text=chunk_text,
@@ -76,45 +78,29 @@ class DocumentLoader:
         logger.info("Extracting tables/structured data")
         try:
             extracted_tables = self.table_extractor.extract(file_path)
-
+            
             for table in extracted_tables:
                 dataframe = table["dataframe"]
-
                 table_title = table.get("table_title", "")
                 column_headers = table.get("column_headers", list(dataframe.columns))
                 page = table.get("page", 1)
-
                 table_metadata = {
                     **base_metadata,
                     "page": page,
                     "table_title": table_title,
-                    "column_headers": json.dumps(column_headers),
+                    "column_headers": column_headers,
                 }
-
-                summary = self.table_summarizer.summarize(
-                    dataframe=dataframe,
-                    table_title=table_title,
+                table_text = dataframe.to_string(index=False)
+                table_chunks = self.chunking_agent.chunk(
+                    text="",
+                    tables=[table_text],
+                    file_path=file_path
                 )
-                chunks.append(
-                    self.chunk_factory.create_table_chunk(
-                        summary=summary,
-                        metadata={**table_metadata, "chunk_index": len(chunks)},
-                    )
-                )
-
-                for row_index, row in dataframe.iterrows():
-                    row_text = self.table_summarizer.summarize_row(
-                        row=row,
-                        table_title=table_title,
-                    )
+                for i, table_chunk in enumerate(table_chunks):
                     chunks.append(
-                        self.chunk_factory.create_table_row_chunk(
-                            text=row_text,
-                            metadata={
-                                **table_metadata,
-                                "chunk_index": len(chunks),
-                                "row_index": int(row_index),
-                            },
+                        self.chunk_factory.create_table_chunk(
+                            summary=table_chunk,
+                            metadata={**table_metadata, "chunk_index": len(chunks)},
                         )
                     )
 
@@ -126,4 +112,3 @@ class DocumentLoader:
 
         logger.info(f"Created {len(chunks)} chunks")
         return chunks
-    

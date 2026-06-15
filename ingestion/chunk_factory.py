@@ -4,20 +4,22 @@ from exceptions.custom_errors import InvalidInputError, ChunkingError
 
 class ChunkFactory:
 
+    def _build_chunk_key(self, text: str, metadata: dict) -> str:
+        return (
+            f"{metadata.get('user_id', '')}:"
+            f"{metadata.get('session_id', '')}:"
+            f"{metadata.get('document_id', '')}:"
+            f"{metadata.get('source', '')}:"
+            f"{metadata.get('chunk_index', '')}:"
+            f"{text[:200]}"
+        )
+
     def create_text_chunk(self, text: str, metadata: dict) -> dict:
         if not text or not text.strip():
             raise InvalidInputError("Chunk text cannot be empty")
         try:
-            chunk_key = (
-                f"{metadata.get('user_id', '')}:"
-                f"{metadata.get('session_id', '')}:"
-                f"{metadata.get('document_id', '')}:"
-                f"{metadata.get('source', '')}:"
-                f"{metadata.get('chunk_index', '')}:"
-                f"{text[:200]}"
-            )
             return {
-                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk_key)),
+                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, self._build_chunk_key(text, metadata))),
                 "chunk_type": "text",
                 "text": text,
                 "metadata": {**metadata, "chunk_type": "text"},
@@ -31,16 +33,8 @@ class ChunkFactory:
         if not summary or not summary.strip():
             raise InvalidInputError("Table summary cannot be empty")
         try:
-            chunk_key = (
-                f"{metadata.get('user_id', '')}:"
-                f"{metadata.get('session_id', '')}:"
-                f"{metadata.get('document_id', '')}:"
-                f"{metadata.get('source', '')}:"
-                f"{metadata.get('chunk_index', '')}:"
-                f"{summary[:200]}"
-            )
             return {
-                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk_key)),
+                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, self._build_chunk_key(summary, metadata))),
                 "chunk_type": "table",
                 "text": summary,
                 "metadata": {**metadata, "chunk_type": "table"},
@@ -66,16 +60,8 @@ class ChunkFactory:
 
             enriched_text = "\n".join(enriched_parts)
 
-            chunk_key = (
-                f"{metadata.get('user_id', '')}:"
-                f"{metadata.get('session_id', '')}:"
-                f"{metadata.get('document_id', '')}:"
-                f"{metadata.get('source', '')}:"
-                f"{metadata.get('chunk_index', '')}:"
-                f"{enriched_text[:200]}"
-            )
             return {
-                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk_key)),
+                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, self._build_chunk_key(enriched_text, metadata))),
                 "chunk_type": "table_row",
                 "text": enriched_text,
                 "metadata": {**metadata, "chunk_type": "table_row"},

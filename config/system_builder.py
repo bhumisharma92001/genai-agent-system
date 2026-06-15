@@ -3,14 +3,10 @@ from agents.reasoning_agent import ReasoningAgent
 from agents.summarization_agent import SummarizationAgent
 from embeddings.sentence_transformer_embedding import SentenceTransformerEmbedding
 from indexing.indexing_pipeline import IndexingPipeline
-from ingestion.chunker import TextChunker
 from ingestion.chunk_factory import ChunkFactory
 from ingestion.document_loader import DocumentLoader
 from ingestion.table_extractor import TableExtractor
-from ingestion.table_summarizer import TableSummarizer
 from ingestion.text_extractor import TextExtractor
-from llm.llm_config import LLMConfig
-from llm.openrouter_llm import OpenRouterLLM
 from memory.episodic_memory import EpisodicMemory
 from memory.memory_manager import MemoryManager
 from retrieval.reranker import Reranker
@@ -19,18 +15,24 @@ from tools.calculator_tool import calculator
 from tools.tool_registry import ToolRegistry
 from orchestrator import AgentOrchestrator
 from vector_db.chroma_db import ChromaDB
-from exceptions.custom_errors import ConfigurationError
 from agents.react_agent import ReActAgent
 from utils.logger import logger
 from functools import partial
+from llm.openrouter_llm import build_llm
+from agents.architect_agent import ArchitectAgent
+from agents.chunking_agent import ChunkingAgent
 
-def build_loader() -> DocumentLoader:
+def build_loader(llm, embedding_model) -> DocumentLoader:
+    architect_agent = ArchitectAgent(llm=llm)
+    chunking_agent = ChunkingAgent(
+        embedding_model=embedding_model,
+        architect_agent=architect_agent
+    )
     return DocumentLoader(
-        chunker=TextChunker(),
         text_extractor=TextExtractor(),
         table_extractor=TableExtractor(),
         chunk_factory=ChunkFactory(),
-        table_summarizer=TableSummarizer(),
+        chunking_agent=chunking_agent,
     )
 
 
@@ -64,24 +66,7 @@ def build_retriever(embedding_model, vector_db) -> Retriever:
     )
 
 
-def build_llm_config() -> LLMConfig:
-    try:
-        return LLMConfig(
-            temperature=float(os.getenv("LLM_TEMPERATURE", 0.7)),
-            top_p=float(os.getenv("LLM_TOP_P", 0.9)),
-            max_tokens=int(os.getenv("LLM_MAX_TOKENS", 512))
-        )
-    except ConfigurationError as e:
-        logger.error(f"Invalid LLM config: {e}")
-        raise SystemExit(1)
-
-
 def build_system() -> tuple:
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    model_name = os.getenv("OPENROUTER_MODEL")
-    if not api_key or not model_name:
-        logger.error("OPENROUTER_API_KEY or OPENROUTER_MODEL not set in .env")
-        raise SystemExit(1)
 
     embedding_model_name = os.getenv("EMBEDDING_MODEL")
     if not embedding_model_name:
@@ -95,9 +80,9 @@ def build_system() -> tuple:
 
     embedding_model = SentenceTransformerEmbedding(model_name=embedding_model_name)
     vector_db = ChromaDB()
-    llm = OpenRouterLLM(api_key=api_key, model_name=model_name)
+    llm = build_llm()
     pipeline = IndexingPipeline(
-        loader=build_loader(),
+        loader=build_loader(llm=llm, embedding_model=embedding_model),
         embedding_model=embedding_model,
         vector_db=vector_db,
     )
@@ -127,7 +112,6 @@ def build_system() -> tuple:
         react_agent=react_agent,
         registry=registry,
         llm=llm,
-        llm_config=build_llm_config(),
     )
 
     return pipeline, orchestrator, memory_manager

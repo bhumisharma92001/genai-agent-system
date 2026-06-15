@@ -1,36 +1,21 @@
 from utils.logger import logger
-from llm.base_llm import BaseLLM
-from llm.llm_config import LLMConfig
+from langchain_core.messages import SystemMessage, HumanMessage
 from exceptions.custom_errors import SummarizationError
 from prompts.summarization_prompts import get_fresh_prompt, get_update_prompt
 
 
 class SummarizationAgent:
 
-    def __init__(self, llm: BaseLLM):
+    def __init__(self, llm):
         self.llm = llm
-        self.config = LLMConfig(temperature=0.2, top_p=0.8, max_tokens=512)
-
     def _call_llm(self, prompt: str) -> str:
         messages = [
-            {"role": "system", "content": "You are a professional summarization assistant."},
-            {"role": "user", "content": prompt}
-        ]
-        response = self.llm.generate(messages=messages, config=self.config)
-        if not response or not response.strip():
+            SystemMessage(content="You are a professional summarization assistant."),
+            HumanMessage(content=prompt)]
+        resp = self.llm.invoke(messages)
+        if not resp.content or not resp.content.strip():
             raise SummarizationError("LLM returned empty summary.")
-        return response.strip()
-
-    def summarize(self, prompt: str) -> str:
-        if not prompt or not prompt.strip():
-            return ""
-        try:
-            return self._call_llm(prompt)
-        except SummarizationError:
-            raise
-        except Exception as e:
-            logger.error(f"SummarizationAgent fault: {e}")
-            raise SummarizationError(f"Summarization failed: {e}") from e
+        return resp.content.strip()
 
     def summarize_fresh(self, conversation: str) -> str:
         if not conversation or not conversation.strip():

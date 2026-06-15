@@ -38,7 +38,7 @@ class MemorySummarizer:
             self._is_summarizing = True
 
         self._summary_thread = threading.Thread(
-            target=self._process,
+            target=self._run_and_reset,
             args=(user_id, session_id),
             daemon=True
         )
@@ -49,6 +49,13 @@ class MemorySummarizer:
                 self._is_summarizing = False
             logger.error(f"Failed to start summarization thread: {e}")
             raise
+
+    def _run_and_reset(self, user_id: str, session_id: str):
+        try:
+            self._process(user_id, session_id)
+        finally:
+            with self._lock:
+                self._is_summarizing = False
 
     def _process(self, user_id: str, session_id: str):
         try:
@@ -97,6 +104,3 @@ class MemorySummarizer:
             logger.exception("Known failure in summarizer engine.")
         except Exception:
             logger.exception("Unexpected error in summarizer engine.")
-        finally:
-            with self._lock:
-                self._is_summarizing = False

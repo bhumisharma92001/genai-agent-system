@@ -11,3 +11,4 @@ app.log
 .vscode/memory.db
 memory_store/
 vector_store/
+memory.db

@@ -1,10 +1,9 @@
 import ast
 import operator
 import re
-from llm.base_llm import BaseLLM
-from llm.llm_config import LLMConfig
 from exceptions.custom_errors import ToolExecutionError
 from prompts.calculator_prompts import get_math_extraction_prompt
+from langchain_core.messages import HumanMessage
 
 _OPS = {
     ast.Add:  operator.add,
@@ -25,7 +24,6 @@ _REPLACEMENTS = [
     (r'\band\b', '+'),
 ]
 
-_MATH_EXTRACT_CONFIG = LLMConfig(temperature=0, top_p=1.0, max_tokens=20)
 
 
 def _safe_eval(expr: str) -> float:
@@ -74,19 +72,12 @@ def _format_result(value: float) -> str:
     return f"{float(value):.6f}".rstrip("0").rstrip(".")
 
 
-def _extract_math_expression(query: str, llm: BaseLLM) -> str:
-    """
-    Call LLM to extract a pure arithmetic expression from natural language.
-    Prompt construction is handled by get_math_extraction_prompt (SRP).
-    """
-    resp = llm.generate(
-        messages=[{"role": "user", "content": get_math_extraction_prompt(query)}],
-        config=_MATH_EXTRACT_CONFIG,
-    )
-    return resp.strip()
+def _extract_math_expression(query: str, llm) -> str:
+    resp = llm.invoke([HumanMessage(content=get_math_extraction_prompt(query))])
+    return resp.content.strip()
 
 
-def calculator(query: str, llm: BaseLLM) -> str:
+def calculator(query: str,llm) -> str:
     """Evaluate arithmetic expressions from natural language."""
     try:
         expr = query.strip().split("=")[0].strip()
@@ -101,7 +92,7 @@ def calculator(query: str, llm: BaseLLM) -> str:
             except ToolExecutionError:
                 pass 
 
-        expr = _extract_math_expression(query, llm)
+        expr = _extract_math_expression(query,llm)
         expr = expr.split("=")[0].strip()
         for pattern, symbol in _REPLACEMENTS:
             expr = re.sub(pattern, symbol, expr, flags=re.I)

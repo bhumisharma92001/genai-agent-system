@@ -1,99 +1,59 @@
-import re
-from utils.logger import logger
-from llm.base_llm import BaseLLM
-from llm.llm_config import LLMConfig
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.agents import create_agent
 from prompts.react_prompts import get_react_system_prompt
-from exceptions.custom_errors import ReasoningGenerationError
 from utils.conversation import build_history
-from tools.tool_registry import ToolRegistry
-
-MAX_ITERATIONS = 5
-
-_ACTION_RE = re.compile(r"Action\s*:\s*(\w+)", re.I)
-_INPUT_RE = re.compile(r"Action\s*Input\s*:\s*(.+)", re.I)
-_FINAL_RE = re.compile(r"Final\s*Answer\s*:\s*(.+)", re.I | re.S)
+from utils.logger import logger
+from exceptions.custom_errors import ReasoningGenerationError
 
 
 class ReActAgent:
 
-    def __init__(self, llm: BaseLLM, retriever, registry):
+    def __init__(self, llm, retriever, registry):
         self.llm = llm
         self.retriever = retriever
         self.registry = registry
+        self._graph_cache: dict = {}
 
-    def _call_tool(self, tool_name: str, tool_input: str, user_id: str, session_id: str) -> str:
-        tool_name = tool_name.strip().lower()
+    def _make_tools(self, user_id: str, session_id: str) -> list:
+        retriever = self.retriever  
+        registry = self.registry
 
-        if tool_name == "retriever":
-            try:
-                chunks = self.retriever.retrieve(
-                    query=tool_input, user_id=user_id, session_id=session_id
-                )
-                if not chunks:
-                    return "No relevant information found in documents."
-                return "\n".join(c.get("text", "") for c in chunks[:3] if c.get("text"))
-            except Exception as e:
-                logger.warning(f"ReAct retriever failed: {e}")
-                return "Retriever error — no results."
+        @tool
+        def retriever_tool(query: str) -> str:
+            """Search indexed documents using short keyword queries of 2-5 words."""
+            chunks = retriever.retrieve(query=query, user_id=user_id, session_id=session_id)
+            if not chunks:
+                return "No relevant information found in documents."
+            return "\n".join(c.get("text", "") for c in chunks if c.get("text"))
 
-        if tool_name == "calculator":
-            try:
-                return self.registry.get("calculator")(tool_input)
-            except Exception as e:
-                logger.warning(f"ReAct calculator failed: {e}")
-                return f"Calculator error: {e}"
+        @tool
+        def calculator_tool(expression: str) -> str:
+            """Evaluate arithmetic expressions. Numbers and operators only e.g. (56 + 87) / 2"""
+            return registry.get("calculator")(expression)
 
-        return f"Unknown tool '{tool_name}'. Use 'retriever' or 'calculator'."
+        return [retriever_tool, calculator_tool]
 
-    def run(self, query: str, user_id: str, session_id: str, history: list[tuple], config: LLMConfig) -> str:
-        messages = [{"role": "system", "content": get_react_system_prompt(max_iter=MAX_ITERATIONS)}]
-
-        history_text = build_history(history)
-        if history_text:
-            messages.append({"role": "system", "content": f"CONVERSATION HISTORY:\n{history_text}"})
-        messages.append({"role": "user", "content": query})
-
-        logger.info(f"ReAct started | Query: '{query}'")
-
-        for iteration in range(MAX_ITERATIONS):
-            try:
-                response = self.llm.generate(messages=messages, config=config)
-            except Exception as e:
-                logger.error(f"ReAct LLM call failed: {e}")
-                raise ReasoningGenerationError(f"ReAct generation failed: {e}") from e
-
-            logger.info(f"ReAct iter {iteration + 1}:\n{response}")
-
-            final_match = _FINAL_RE.search(response)
-            if final_match:
-                answer = final_match.group(1).strip()
-                logger.info(f"ReAct Final Answer: {answer}")
-                return answer
-
-            action_match = _ACTION_RE.search(response)
-            input_match = _INPUT_RE.search(response)
-
-            if not action_match or not input_match:
-                logger.warning("ReAct: No action found, treating response as final answer.")
-                return response.strip()
-
-            tool_name = action_match.group(1).strip()
-            tool_input = input_match.group(1).strip()
-            logger.info(f"ReAct Action: {tool_name} | Input: '{tool_input}'")
-
-            observation = self._call_tool(tool_name, tool_input, user_id, session_id)
-            logger.info(f"ReAct Observation: {observation}")
-
-            messages.append({"role": "assistant", "content": response})
-            messages.append({"role": "user", "content": f"Observation: {observation}"})
-        logger.warning("ReAct: Max iterations reached.")
+    def run(self, query: str, user_id: str, session_id: str, history: list[tuple], config=None) -> str:
         try:
-            final_response = self.llm.generate(messages=messages + [
-                {"role": "user", "content": "Please provide your Final Answer now based on what you have found."}
-            ], config=config)
-            final_match = _FINAL_RE.search(final_response)
-            if final_match:
-                return final_match.group(1).strip()
-            return final_response.strip()
-        except Exception:
-            return "I could not complete the reasoning chain. Please try rephrasing."
+            cache_key = (user_id, session_id)
+            if cache_key not in self._graph_cache:
+                tools = self._make_tools(user_id, session_id)
+                self._graph_cache[cache_key] = create_agent(
+                    model=self.llm,
+                    tools=tools,
+                    system_prompt=get_react_system_prompt(),
+                )
+            graph = self._graph_cache[cache_key]
+
+            history_text = build_history(history)
+            messages = []
+            if history_text:
+                messages.append(SystemMessage(content=f"CONVERSATION HISTORY:\n{history_text}"))
+            messages.append(HumanMessage(content=query))
+
+            result = graph.invoke({"messages": messages})  
+            return result["messages"][-1].content           
+        except Exception as e:
+            logger.error(f"ReAct failed: {e}")
+            raise ReasoningGenerationError(f"ReAct failed: {e}") from e

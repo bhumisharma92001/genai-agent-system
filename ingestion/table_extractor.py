@@ -18,17 +18,17 @@ class TableExtractor:
 
     def extract(self, file_path: str) -> list[dict]:
         if not file_path:
-            raise ValueError("file_path cannot be empty")
+            raise InvalidInputError("file_path cannot be empty")
         path = Path(file_path)
         if not path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+            raise InvalidInputError(f"File not found: {file_path}")
         try:
             extension = path.suffix.lower()
             handler = self.handlers.get(extension)
             if not handler:
                 return []
             return handler(file_path)
-        except (ValueError, FileNotFoundError, ExtractionError):
+        except (InvalidInputError, ExtractionError):
             raise
         except Exception as e:
             raise ExtractionError(f"Failed to extract tables: {e}") from e
@@ -64,7 +64,7 @@ class TableExtractor:
 
                         # Attempt to infer a table title from page text
                         # Look for the last non-empty line before typical table keywords
-                        table_title = _infer_title(page_text_lines, table_index, page_number)
+                        table_title = self._infer_title(page_text_lines, table_index, page_number)
 
                         extracted_tables.append({
                             "dataframe": df,
@@ -106,16 +106,16 @@ class TableExtractor:
             raise ExtractionError(f"Failed to extract dataframe tables: {e}") from e
 
 
-def _infer_title(page_lines: list[str], table_index: int, page_number: int) -> str:
-    """
-    Best-effort: scan page lines for a short heading-like line.
-    Falls back to 'Table <N> (Page <P>)' if nothing useful found.
-    """
-    candidates = [
-        line.strip() for line in page_lines
-        if line.strip() and len(line.strip()) < 80 and not line.strip().startswith("|")
-    ]
-    # Last short line on page is often the table caption/heading
-    if candidates:
-        return candidates[-1]
-    return f"Table {table_index + 1} (Page {page_number})"
+    @staticmethod
+    def _infer_title(page_lines: list[str], table_index: int, page_number: int) -> str:
+        """
+        Best-effort: scan page lines for a short heading-like line.
+        Falls back to 'Table <N> (Page <P>)' if nothing useful found.
+        """
+        candidates = [
+            line.strip() for line in page_lines
+            if line.strip() and len(line.strip()) < 80 and not line.strip().startswith("|")
+        ]
+        if candidates:
+            return candidates[-1]
+        return f"Table {table_index + 1} (Page {page_number})"
