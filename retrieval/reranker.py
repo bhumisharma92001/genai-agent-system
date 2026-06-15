@@ -24,7 +24,7 @@ class Reranker:
         score_threshold: float | None = None
     ) -> list[dict]:
         if not query or not query.strip():
-            raise InvalidInputError("top_k must be positive")
+            raise InvalidInputError("query cannot be empty")
         if not chunks:
             return []
         if top_k <= 0:

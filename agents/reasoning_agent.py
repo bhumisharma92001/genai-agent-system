@@ -1,15 +1,14 @@
 from utils.logger import logger
-from llm.base_llm import BaseLLM
-from llm.llm_config import LLMConfig
 from exceptions.custom_errors import ReasoningGenerationError, InvalidQueryError
 from utils.conversation import build_history
 from prompts.reasoning_prompts import get_reasoning_system_prompt
+from langchain_core.messages import HumanMessage, SystemMessage
 
 
 class ReasoningAgent:
 
-    def __init__(self, llm: BaseLLM):
-        self.llm = llm
+    def __init__(self, llm):
+        self.llm = llm 
 
     def _build_context(self, chunks: list[dict]) -> str:
         """
@@ -29,24 +28,24 @@ class ReasoningAgent:
 
         return "\n\n".join(parts)
 
-    def _messages(self, query: str, chunks: list[dict], history: list[tuple]) -> list[dict]:
+    def _messages(self, query: str, chunks: list[dict], history: list[tuple]) -> list:
         context = self._build_context(chunks)
         history_text = build_history(history)
         return [
-            {"role": "system", "content": get_reasoning_system_prompt(context, history_text)},
-            {"role": "user", "content": f"Question: {query}"},
+            SystemMessage(content=get_reasoning_system_prompt(context, history_text)),
+            HumanMessage(content=f"Question: {query}"),
         ]
 
-    def answer(self, query: str, chunks: list[dict], history: list[tuple], config: LLMConfig) -> str:
+    def answer(self, query, chunks, history):
         if not query or not query.strip():
             raise InvalidQueryError("Query cannot be empty.")
         if not chunks:
             return "I could not find the answer in the provided documents."
         try:
-            resp = self.llm.generate(messages=self._messages(query, chunks, history), config=config)
-            if not resp:
+            resp = self.llm.invoke(self._messages(query, chunks, history))
+            if not resp.content:
                 raise ReasoningGenerationError("LLM returned empty response.")
-            return resp.strip()
+            return resp.content.strip()
         except (InvalidQueryError, ReasoningGenerationError):
             raise
         except Exception as e:

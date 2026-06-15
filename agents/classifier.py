@@ -1,6 +1,5 @@
 from enum import Enum
-from llm.base_llm import BaseLLM
-from llm.llm_config import LLMConfig
+from langchain_core.messages import HumanMessage
 from prompts.classification_prompts import get_classification_prompt, PURE_MATH_RE
 from utils.logger import logger
 
@@ -12,18 +11,13 @@ class QueryCategory(Enum):
     ACTION = "ACTION"
 
 
-def classify_query(query: str, llm: BaseLLM) -> QueryCategory:
+def classify_query(query: str, llm) -> QueryCategory:
     if PURE_MATH_RE.search(query.strip()):
         return QueryCategory.MATH
-    resp = llm.generate(
-        messages=[{"role": "user", "content": get_classification_prompt(query)}],
-        config=LLMConfig(temperature=0, top_p=1.0, max_tokens=10),
-    )
+    resp = llm.invoke([HumanMessage(content=get_classification_prompt(query))])
     try:
-        category = QueryCategory(resp.strip().upper())
-        if category == QueryCategory.ACTION:
-            logger.warning(f"ACTION query — no handler implemented: '{query}'")
+        category = QueryCategory(resp.content.strip().upper())
         return category
     except ValueError:
-        logger.warning(f"Unknown category '{resp.strip()}'. Defaulting to INFORMATIONAL.")
+        logger.warning(f"Unknown category '{resp.content.strip()}'.")
         return QueryCategory.INFORMATIONAL
