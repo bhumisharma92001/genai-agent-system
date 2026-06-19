@@ -13,13 +13,13 @@ class IndexingPipeline:
         self.embedding_model = embedding_model
         self.vector_db = vector_db
 
-    def index_document(self, file_path: str, user_id: str, session_id: str) -> None:
+    async def index_document(self, file_path: str, user_id: str, session_id: str) -> None:
         if not file_path or not file_path.strip():
             raise InvalidInputError("file_path cannot be empty")
         try:
             doc_id = os.path.basename(file_path)
 
-            chunks = self.loader.load(file_path, user_id, session_id, document_id=doc_id)
+            chunks = await self.loader.load(file_path, user_id, session_id, document_id=doc_id)
 
             valid_chunks = [c for c in chunks if c.get("text", "").strip()]
             if not valid_chunks:

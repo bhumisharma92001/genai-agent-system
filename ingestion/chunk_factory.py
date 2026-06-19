@@ -11,6 +11,7 @@ class ChunkFactory:
             f"{metadata.get('document_id', '')}:"
             f"{metadata.get('source', '')}:"
             f"{metadata.get('chunk_index', '')}:"
+            f"{metadata.get('page_number', '')}:"
             f"{text[:200]}"
         )
 
@@ -43,30 +44,3 @@ class ChunkFactory:
             raise
         except Exception as e:
             raise ChunkingError(f"Failed to create table chunk: {e}") from e
-
-    def create_table_row_chunk(self, text: str, metadata: dict) -> dict:
-        if not text or not text.strip():
-            raise InvalidInputError("Table row text cannot be empty")
-        try:
-            table_title = metadata.get("table_title", "")
-            headers = metadata.get("column_headers", [])
-
-            enriched_parts = []
-            if table_title:
-                enriched_parts.append(f"Table: {table_title}")
-            if headers:
-                enriched_parts.append(f"Columns: {' | '.join(str(h) for h in headers)}")
-            enriched_parts.append(f"Row: {text}")
-
-            enriched_text = "\n".join(enriched_parts)
-
-            return {
-                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, self._build_chunk_key(enriched_text, metadata))),
-                "chunk_type": "table_row",
-                "text": enriched_text,
-                "metadata": {**metadata, "chunk_type": "table_row"},
-            }
-        except InvalidInputError:
-            raise
-        except Exception as e:
-            raise ChunkingError(f"Failed to create table row chunk: {e}") from e

@@ -1,4 +1,5 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 
 from config.runtime_state import RuntimeState
@@ -9,7 +10,7 @@ from utils.logger import logger
 
 def main():
     try:
-        run_repl_loop(*initialize_system())
+        asyncio.run(run_repl_loop(*initialize_system()))
     except SystemExit:
         raise
     except Exception as e:
@@ -26,12 +27,12 @@ def initialize_system():
     return pipeline, orchestrator, memory_manager, runtime
 
 
-def run_repl_loop(pipeline, orchestrator, memory_manager, runtime):
+async def run_repl_loop(pipeline, orchestrator, memory_manager, runtime):
     user_id = runtime.user_id
     session_id = runtime.session_id
 
     handler = CommandHandler(pipeline, memory_manager, orchestrator)
-    handler.handle_startup_ingestion(user_id, session_id)
+    await handler.handle_startup_ingestion(user_id, session_id)
 
     interaction_count = 0
     print("\nSystem ready. Type your queries below.")
@@ -52,7 +53,7 @@ def run_repl_loop(pipeline, orchestrator, memory_manager, runtime):
             break
 
         if query.startswith("/ingest"):
-            handler.handle_ingest(query, user_id, session_id)
+            await handler.handle_ingest(query, user_id, session_id)
             continue
 
         if query.startswith("/list"):
