@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 from ingestion.text_extractor import TextExtractor
 from ingestion.table_extractor import TableExtractor
 from ingestion.chunk_factory import ChunkFactory
@@ -22,7 +23,7 @@ class DocumentLoader:
         self.chunk_factory = chunk_factory
         self.chunking_agent = chunking_agent
 
-    def load(
+    async def load(
         self,
         file_path: str,
         user_id: str,
@@ -51,18 +52,27 @@ class DocumentLoader:
         if not is_spreadsheet:
             logger.info("Extracting raw text for non-spreadsheet file")
             try:
-                text = self.text_extractor.extract(file_path)
-                if text.strip():
-                    text_chunks = self.chunking_agent.chunk(
-                        text=text,
-                        tables=[],
-                        file_path=file_path
-                    )
-                    for i, chunk_text in enumerate(text_chunks):
+                pages_data = self.text_extractor.extract(file_path)
+                tasks = [
+                    self.chunking_agent.chunk(text=page["text"], tables=[], file_path=file_path, page_no=page["page_no"])
+                    for page in pages_data
+                ]
+                all_page_chunks = await asyncio.gather(*tasks)
+                    
+                for page, result in zip(pages_data, all_page_chunks):
+                    text_chunks = result["chunks"]
+                    used_config = result["config"]
+                    for chunk_idx, chunk_text in enumerate(text_chunks):
                         chunks.append(
                             self.chunk_factory.create_text_chunk(
                                 text=chunk_text,
-                                metadata={**base_metadata, "chunk_index": i},
+                                metadata={
+                                    **base_metadata,
+                                    "page_number": page["page_no"],
+                                    "chunk_index": chunk_idx,
+                                    "chunk_size_used": used_config.get("chunk_size"),
+                                    "overlap_used": used_config.get("overlap"),
+                                },
                             )
                         )
             except InvalidInputError:
@@ -86,23 +96,20 @@ class DocumentLoader:
                 page = table.get("page", 1)
                 table_metadata = {
                     **base_metadata,
-                    "page": page,
+                    "page_number": page,
                     "table_title": table_title,
                     "column_headers": column_headers,
                 }
-                table_text = dataframe.to_string(index=False)
-                table_chunks = self.chunking_agent.chunk(
-                    text="",
-                    tables=[table_text],
-                    file_path=file_path
-                )
-                for i, table_chunk in enumerate(table_chunks):
+                table_text = dataframe.to_string(index=False) 
+                table_result = await self.chunking_agent.chunk(text="", tables=[table_text], file_path=file_path)
+                table_chunks = table_result["chunks"]   
+                for table_chunk in table_chunks:
                     chunks.append(
                         self.chunk_factory.create_table_chunk(
                             summary=table_chunk,
                             metadata={**table_metadata, "chunk_index": len(chunks)},
                         )
-                    )
+                )
 
         except InvalidInputError:
             raise

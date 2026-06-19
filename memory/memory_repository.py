@@ -73,20 +73,6 @@ class MemoryRepository:
                 (user_id, session_id)
             )
 
-    def get_last_session_id(self, user_id: str) -> str | None:
-        with self._lock, self._get_connection() as conn:
-            row = conn.execute(
-                """
-                SELECT session_id
-                FROM user_sessions
-                WHERE user_id = ?
-                ORDER BY updated_at DESC
-                LIMIT 1
-                """,
-                (user_id,)
-            ).fetchone()
-        return row[0] if row else None
-
     def get_all_sessions(self, user_id: str) -> list[tuple[str, str, str]]:
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(

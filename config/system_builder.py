@@ -25,7 +25,6 @@ from agents.chunking_agent import ChunkingAgent
 def build_loader(llm, embedding_model) -> DocumentLoader:
     architect_agent = ArchitectAgent(llm=llm)
     chunking_agent = ChunkingAgent(
-        embedding_model=embedding_model,
         architect_agent=architect_agent
     )
     return DocumentLoader(
